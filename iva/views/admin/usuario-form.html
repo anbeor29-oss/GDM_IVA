@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cliente — IVA Admin GDM</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="marca" style="line-height:1.1">IVA — Administrador<br><span style="font-size:.7rem;font-weight:500;opacity:.85">Grupo GDM High Consulting México</span></span>
+  <a href="/admin/dashboard">&#8592; Volver</a>
+</nav>
+
+<div class="admin-wrap" style="max-width:640px">
+  <h2 id="tituloForm">Nuevo cliente</h2>
+
+  <div id="alerta" class="alerta" style="display:none"></div>
+
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data" id="formUsuario">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="nombre">Nombre completo *</label>
+          <input type="text" id="nombre" name="nombre" required>
+        </div>
+        <div class="form-group">
+          <label for="rfc">RFC *</label>
+          <input type="text" id="rfc" name="rfc" required maxlength="13"
+                 style="text-transform:uppercase" placeholder="XAXX010101000">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="username">Usuario de acceso *</label>
+          <input type="text" id="username" name="username" required autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="password">Contraseña de acceso <span id="passReq">*</span></label>
+          <input type="password" id="password" name="password" autocomplete="new-password" minlength="6">
+          <p class="form-hint" id="passHint">Mínimo 6 caracteres.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="cer">Archivo e-firma (.cer) <span id="cerReq">*</span></label>
+        <input type="file" id="cer" name="cer" accept=".cer">
+        <p class="form-hint">Certificado público de la e-firma del cliente.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="key">Archivo llave privada (.key) <span id="keyReq">*</span></label>
+        <input type="file" id="key" name="key" accept=".key">
+        <p class="form-hint">Llave privada cifrada de la e-firma.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="efirma_password">Contraseña e-firma <span id="efirmaReq">*</span></label>
+        <input type="password" id="efirma_password" name="efirma_password" autocomplete="new-password">
+        <p class="form-hint">Contraseña del archivo .key. Se guardará cifrada.</p>
+      </div>
+
+      <div style="display:flex;gap:1rem;margin-top:1.5rem">
+        <button type="submit" class="btn-primary" style="flex:1">Guardar cliente</button>
+        <a href="/admin/dashboard" style="flex:1">
+          <button type="button" class="btn-primary" style="background:#64748b;width:100%">Cancelar</button>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const params  = new URLSearchParams(window.location.search);
+const path    = window.location.pathname;
+const isEditar = path.includes('/editar');
+const idMatch  = path.match(/\/usuarios\/(\d+)\//);
+const usuarioId = idMatch ? idMatch[1] : null;
+
+// Mostrar errores
+const errores = {
+  campos:    'Completa todos los campos obligatorios.',
+  archivos:  'Debes subir los archivos .cer y .key.',
+  duplicado: 'El nombre de usuario ya existe. Elige otro.',
+  1:         'Error al guardar. Intenta de nuevo.'
+};
+const err = params.get('error');
+if (err && errores[err]) {
+  const al = document.getElementById('alerta');
+  al.textContent = errores[err];
+  al.style.display = 'block';
+}
+
+// Modo edición
+if (isEditar && usuarioId) {
+  document.getElementById('tituloForm').textContent = 'Editar cliente';
+  document.getElementById('passReq').textContent = '(dejar vacío para no cambiar)';
+  document.getElementById('cerReq').textContent  = '(dejar vacío para no cambiar)';
+  document.getElementById('keyReq').textContent  = '(dejar vacío para no cambiar)';
+  document.getElementById('efirmaReq').textContent = '(dejar vacío para no cambiar)';
+  document.getElementById('passHint').textContent = 'Dejar vacío para mantener la contraseña actual.';
+  document.getElementById('formUsuario').action = `/admin/usuarios/${usuarioId}/editar`;
+
+  // Pre-llenar datos
+  fetch(`/admin/api/usuarios/${usuarioId}`)
+    .then(r => r.json())
+    .then(u => {
+      document.getElementById('nombre').value   = u.nombre   || '';
+      document.getElementById('username').value = u.username || '';
+      document.getElementById('rfc').value      = u.rfc      || '';
+    });
+} else {
+  document.getElementById('formUsuario').action = '/admin/usuarios/nuevo';
+  document.getElementById('password').required       = true;
+  document.getElementById('efirma_password').required = true;
+  document.getElementById('cer').required = true;
+  document.getElementById('key').required = true;
+}
+</script>
+</body>
+</html>

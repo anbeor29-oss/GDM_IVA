@@ -1,0 +1,33 @@
+{
+  "name": "iva.html",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@nodecfdi/sat-ws-descarga-masiva": "^2.0.0",
+    "adm-zip": "^0.5.17",
+    "axios": "^1.16.1",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
+    "fast-xml-parser": "^5.8.0",
+    "helmet": "^8.2.0",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "node-forge": "^1.4.0",
+    "uuid": "^14.0.0",
+    "xml-crypto": "^6.1.2",
+    "xmlbuilder2": "^4.0.3"
+  }
+}

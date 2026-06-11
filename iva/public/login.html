@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IVA — Grupo GDM High Consulting México</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <h1 style="font-size:1.25rem;line-height:1.2">IVA<br><span style="font-size:.9rem;font-weight:600;color:#475569">Grupo GDM High Consulting México</span></h1>
+    <p class="subtitulo">Consulta de IVA mensual</p>
+
+    <div id="alerta" class="alerta" style="display:none"></div>
+
+    <form method="POST" action="/login">
+      <label for="username">Usuario</label>
+      <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+      <button type="submit" class="btn-primary">Ingresar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const error  = params.get('error');
+  const alerta = document.getElementById('alerta');
+
+  const mensajes = {
+    ventana: 'La consulta solo está disponible del día 10 al 29 de cada mes.',
+    efirma:  'Tu cuenta no tiene e-firma configurada. Contacta al administrador.'
+  };
+
+  // Credenciales inválidas → redirige a página exclusiva con CTA de WhatsApp
+  if (error === 'credenciales') {
+    window.location.href = '/acceso-denegado.html';
+  } else if (error && mensajes[error]) {
+    alerta.textContent = mensajes[error];
+    alerta.style.display = 'block';
+  }
+</script>
+</body>
+</html>

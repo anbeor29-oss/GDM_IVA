@@ -1,0 +1,29 @@
+# Configuración de despliegue automático en Render.com
+# Cuando subas este archivo a GitHub, Render lo lee y configura todo solo
+
+services:
+  - type: web
+    name: gdm-iva
+    runtime: node
+    plan: free                          # Plan gratis ($0/mes)
+    region: oregon                      # Mas cercano a Mexico que dan en free
+    rootDir: iva                        # La app vive dentro de la carpeta iva/
+    buildCommand: npm install --production
+    startCommand: node server.js
+    healthCheckPath: /login
+
+    # Variables de entorno (las pones desde el dashboard de Render)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true             # Render genera uno aleatorio seguro
+      - key: TEMP_XML_PATH
+        value: /tmp/temp2xml
+      - key: BASE_PATH
+        value: ""                       # Vacío porque usamos subdominio (no subruta)
+
+# NOTA SOBRE LOS XMLs:
+# Render usa disco efímero — los XMLs se borran cuando la app se reinicia.
+# Esto está perfecto para nuestro caso: los clientes descargan, ven IVA,
+# y los XMLs se limpian solos. El scheduler interno también los limpia el día 28.

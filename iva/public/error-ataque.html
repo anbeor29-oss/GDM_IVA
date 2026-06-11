@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Acceso Bloqueado</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="error-wrap">
+  <div class="error-card">
+    <h1>&#9888; ACCESO BLOQUEADO</h1>
+    <p>Tu dirección IP ha sido bloqueada por actividad sospechosa.</p>
+    <p>Si crees que esto es un error, contacta al administrador del sistema.</p>
+    <p style="margin-top:2rem; font-size:.8rem; color:#6b7280;">
+      Referencia: <span id="ts"></span>
+    </p>
+  </div>
+</div>
+<script>
+  document.getElementById('ts').textContent = new Date().toLocaleString('es-MX');
+</script>
+</body>
+</html>

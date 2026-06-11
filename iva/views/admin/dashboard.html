@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — IVA Grupo GDM High Consulting México</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="marca" style="line-height:1.1">IVA — Administrador<br><span style="font-size:.7rem;font-weight:500;opacity:.85">Grupo GDM High Consulting México</span></span>
+  <div style="display:flex;gap:1rem;align-items:center">
+    <a href="/admin/logout">Cerrar sesión</a>
+  </div>
+</nav>
+
+<div class="admin-wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <h2>Clientes registrados</h2>
+    <a href="/admin/usuarios/nuevo"><button class="btn-nuevo">+ Nuevo cliente</button></a>
+  </div>
+
+  <div id="msgOk" class="alerta alerta-info" style="display:none"></div>
+  <div id="msgErr" class="alerta" style="display:none"></div>
+
+  <div class="card">
+    <table id="tablaUsuarios" style="width:100%;font-size:.88rem">
+      <thead>
+        <tr>
+          <th style="padding:.5rem">Nombre</th>
+          <th>Usuario</th>
+          <th>RFC</th>
+          <th>Estado</th>
+          <th>Alta</th>
+          <th style="text-align:center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="bodyUsuarios">
+        <tr><td colspan="6" style="padding:2rem;text-align:center;color:#94a3b8">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+if (params.get('ok')) {
+  const msgs = { nuevo:'Cliente creado exitosamente.', editado:'Cliente actualizado.', eliminado:'Cliente eliminado.' };
+  const el = document.getElementById('msgOk');
+  el.textContent = msgs[params.get('ok')] || 'Operación exitosa.';
+  el.style.display = 'block';
+}
+
+async function cargarUsuarios() {
+  const res  = await fetch('/admin/api/usuarios');
+  const data = await res.json();
+  const tbody = document.getElementById('bodyUsuarios');
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem;text-align:center;color:#94a3b8">No hay clientes registrados.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(u => `
+    <tr>
+      <td style="padding:.45rem .5rem">${u.nombre}</td>
+      <td>${u.username}</td>
+      <td><code>${u.rfc}</code></td>
+      <td><span class="badge ${u.activo ? 'badge-activo' : 'badge-inactivo'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+      <td>${u.created_at ? u.created_at.substring(0,10) : ''}</td>
+      <td style="text-align:center;display:flex;gap:.4rem;justify-content:center">
+        <a href="/admin/usuarios/${u.id}/editar"><button class="btn-sm btn-editar">Editar</button></a>
+        <button class="btn-sm btn-toggle" onclick="toggleUsuario(${u.id}, this)">${u.activo ? 'Desactivar' : 'Activar'}</button>
+        <button class="btn-sm btn-eliminar" onclick="eliminarUsuario(${u.id}, '${u.nombre}')">Eliminar</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function toggleUsuario(id, btn) {
+  await fetch(`/admin/usuarios/${id}/toggle`, { method: 'POST' });
+  cargarUsuarios();
+}
+
+async function eliminarUsuario(id, nombre) {
+  if (!confirm(`¿Eliminar al cliente "${nombre}"?\nSe borrarán sus archivos de e-firma.`)) return;
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = `/admin/usuarios/${id}/eliminar`;
+  document.body.appendChild(form);
+  form.submit();
+}
+
+cargarUsuarios();
+</script>
+</body>
+</html>

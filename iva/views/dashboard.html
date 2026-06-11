@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IVA — Grupo GDM High Consulting México</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<!-- Modal de confirmación antes de descargar del SAT -->
+<div id="modalConfirmar" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#fff;border-radius:14px;max-width:540px;width:100%;padding:2rem;box-shadow:0 25px 50px -12px rgba(0,0,0,.5)">
+    <h2 style="color:#0f172a;font-size:1.3rem;margin:0 0 .25rem">Antes de descargar del SAT</h2>
+    <p style="color:#64748b;margin:0 0 1.5rem;font-size:.9rem">Por favor lee los siguientes avisos:</p>
+
+    <div style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;padding:1rem;margin-bottom:.75rem;color:#78350f;font-size:.92rem;line-height:1.5">
+      <strong style="color:#92400e;display:block;margin-bottom:.25rem">⚠️ Aviso 1</strong>
+      Recuerda que tienes <strong>dos intentos por día</strong> para descargar datos del SAT.
+    </div>
+
+    <div style="background:#dbeafe;border-left:4px solid #3b82f6;border-radius:8px;padding:1rem;margin-bottom:.75rem;color:#1e3a8a;font-size:.92rem;line-height:1.5">
+      <strong style="color:#1d4ed8;display:block;margin-bottom:.25rem">ℹ️ Aviso 2</strong>
+      Recuerda que dependemos de que los <strong>servicios del SAT funcionen correctamente</strong>.
+    </div>
+
+    <div style="background:#fee2e2;border-left:4px solid #dc2626;border-radius:8px;padding:1rem;margin-bottom:1.5rem;color:#7f1d1d;font-size:.92rem;line-height:1.5">
+      <strong style="color:#b91c1c;display:block;margin-bottom:.25rem">🗓️ Aviso 3</strong>
+      Solo tienes hasta el <strong>día 28 de cada mes</strong> para ver tus movimientos. Después se borran en automático y comenzamos un nuevo mes.
+    </div>
+
+    <div style="display:flex;gap:.75rem;justify-content:flex-end">
+      <button type="button" id="btnCancelarDescarga" style="padding:.7rem 1.5rem;border:1px solid #cbd5e1;background:#fff;border-radius:8px;cursor:pointer;font-weight:600;color:#475569">Cancelar</button>
+      <button type="button" id="btnConfirmarDescarga" style="padding:.7rem 1.5rem;border:none;background:#1d4ed8;color:#fff;border-radius:8px;cursor:pointer;font-weight:700">Sí, descargar del SAT</button>
+    </div>
+  </div>
+</div>
+
+<nav class="navbar">
+  <span class="marca" style="line-height:1.1">IVA<br><span style="font-size:.7rem;font-weight:500;opacity:.85">Grupo GDM High Consulting México</span></span>
+  <span class="usuario" id="infoUsuario">Cargando...</span>
+  <div style="display:flex;gap:1rem;align-items:center">
+    <button class="btn-cargar" id="btnCargar">&#8635; Descargar del SAT</button>
+    <a href="/logout">Salir</a>
+  </div>
+</nav>
+
+<div class="dashboard-wrap">
+  <div id="msgEstado" style="display:none;padding:.5rem 1rem;font-size:.85rem;text-align:center"></div>
+
+  <div class="paneles">
+    <!-- Panel izquierdo: Emitidos -->
+    <div class="panel">
+      <div class="panel-header">&#128196; FACTURAS EMITIDAS &nbsp;(IVA Trasladado / Cobrado)</div>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Folio</th>
+              <th>Empresa Receptora</th>
+              <th class="num">SubTotal</th>
+              <th class="num">IVA</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody id="bodyEmitidos">
+            <tr><td colspan="6" style="text-align:center;padding:2rem;color:#94a3b8">
+              Presiona "Descargar del SAT" para obtener los datos
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-footer">
+        <span class="etiqueta">TOTAL IVA TRASLADADO:</span>
+        <span class="monto" id="totalEmitidos">$0.00</span>
+      </div>
+    </div>
+
+    <!-- Panel derecho: Recibidos -->
+    <div class="panel">
+      <div class="panel-header recibidos">&#128196; FACTURAS RECIBIDAS &nbsp;(IVA Acreditable)</div>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Folio</th>
+              <th>Empresa Emisora</th>
+              <th class="num">SubTotal</th>
+              <th class="num">IVA</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody id="bodyRecibidos">
+            <tr><td colspan="6" style="text-align:center;padding:2rem;color:#94a3b8">
+              Presiona "Descargar del SAT" para obtener los datos
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-footer">
+        <span class="etiqueta">TOTAL IVA ACREDITABLE:</span>
+        <span class="monto" id="totalRecibidos">$0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de resultado -->
+  <div class="resultado-bar">
+    <div class="item">
+      <span class="lbl">IVA Trasladado:</span>
+      <span class="val" id="resTraslado">$0.00</span>
+    </div>
+    <div class="item">
+      <span class="lbl">IVA Acreditable:</span>
+      <span class="val" id="resAcreditable">$0.00</span>
+    </div>
+    <div class="item" style="font-size:1.05rem">
+      <span class="lbl" id="resEtiqueta">RESULTADO:</span>
+      <span class="val" id="resValor">$0.00</span>
+    </div>
+  </div>
+</div>
+
+<script src="/js/antiCapture.js"></script>
+<script>
+const fmt = n => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);
+
+function mostrarMensaje(texto, tipo) {
+  var msg = document.getElementById('msgEstado');
+  msg.textContent = texto;
+  msg.style.display = 'block';
+  if (tipo === 'ok')    { msg.style.background = '#f0fdf4'; msg.style.color = '#166534'; }
+  if (tipo === 'error') { msg.style.background = '#fef2f2'; msg.style.color = '#991b1b'; }
+  if (tipo === 'info')  { msg.style.background = '#eff6ff'; msg.style.color = '#1d4ed8'; }
+}
+
+// ── Renderizado de tablas ──────────────────────────────────────────────────────
+function renderTabla(bodyId, filas, ladoEmpresa) {
+  var tbody = document.getElementById(bodyId);
+  if (!tbody) return;
+  if (!filas || filas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#94a3b8">Sin comprobantes con IVA en el mes</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < filas.length; i++) {
+    var c = filas[i];
+    var empresa = ladoEmpresa === 'emisor' ? (c.nombreReceptor || c.rfcReceptor || '') : (c.nombreEmisor || c.rfcEmisor || '');
+    var folio = (c.serie ? c.serie + '-' : '') + (c.folio || c.uuid.substring(0, 8));
+    var empCorta = empresa.length > 28 ? empresa.substring(0, 28) + '…' : empresa;
+    var esNC = c.tipoComp === 'E';   // Nota de crédito → IVA negativo
+    var esREP = c.tipoComp === 'P';  // REP → color especial
+    var estilo = esNC ? ' style="color:#b91c1c"' : esREP ? ' style="color:#1d4ed8"' : '';
+    html += '<tr' + estilo + '>';
+    html += '<td>' + (c.fecha || '') + '</td>';
+    // Chip de tipo: I/PUE en gris, REP en azul, N.Créd en rojo
+    var chipColor = esNC ? '#fef2f2;color:#b91c1c' : esREP ? '#eff6ff;color:#1d4ed8' : '#f8fafc;color:#475569';
+    html += '<td><span style="font-size:.7rem;padding:1px 5px;border-radius:3px;background:' + chipColor + '">' + (c.etiquetaTipo || c.tipoComp || '') + '</span></td>';
+    html += '<td>' + folio + '</td>';
+    html += '<td title="' + empresa + '">' + empCorta + '</td>';
+    html += '<td class="num">' + fmt(Math.abs(c.subtotal || 0)) + '</td>';
+    html += '<td class="num">' + (esNC ? '-' : '') + fmt(Math.abs(c.iva || 0)) + '</td>';
+    html += '<td class="num">' + fmt(Math.abs(c.total || 0)) + '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function renderDatos(d) {
+  if (!d) return;
+  renderTabla('bodyEmitidos',  d.emitidos  || [], 'emisor');
+  renderTabla('bodyRecibidos', d.recibidos || [], 'receptor');
+
+  document.getElementById('totalEmitidos').textContent  = fmt(d.ivaTraslado    || 0);
+  document.getElementById('totalRecibidos').textContent = fmt(d.ivaAcreditable || 0);
+  document.getElementById('resTraslado').textContent    = fmt(d.ivaTraslado    || 0);
+  document.getElementById('resAcreditable').textContent = fmt(d.ivaAcreditable || 0);
+
+  var resValor    = document.getElementById('resValor');
+  var resEtiqueta = document.getElementById('resEtiqueta');
+  resValor.textContent = fmt(Math.abs(d.resultado || 0));
+
+  if (d.aCargo) {
+    resEtiqueta.textContent = 'IVA A CARGO:';
+    resValor.className = 'val cargo';
+  } else {
+    resEtiqueta.textContent = 'IVA A FAVOR:';
+    resValor.className = 'val favor';
+  }
+}
+
+// ── Cargar sesión ─────────────────────────────────────────────────────────────
+fetch('/dashboard/api/sesion')
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    document.getElementById('infoUsuario').textContent =
+      (d.nombre || '') + ' | RFC: ' + (d.rfc || '') + ' | Día ' + (d.dia || '');
+  })
+  .catch(function() {});
+
+// ── Cargar datos existentes al abrir la página ─────────────────────────────────
+fetch('/dashboard/api/datos')
+  .then(function(r) {
+    if (!r.ok) return null;
+    return r.json();
+  })
+  .then(function(d) {
+    if (d && d.ok && (d.emitidos.length > 0 || d.recibidos.length > 0)) {
+      renderDatos(d);
+      mostrarMensaje(
+        'Datos del mes cargados: ' + d.emitidos.length + ' emitidos, ' + d.recibidos.length + ' recibidos.',
+        'ok'
+      );
+    }
+  })
+  .catch(function() {});
+
+// ── Estado de descarga en background ─────────────────────────────────────────
+var _jobId         = null;
+var _pollingTimer  = null;
+var _tiempoInicio  = null;
+
+function detenerPolling() {
+  if (_pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
+}
+
+function tiempoTranscurrido() {
+  if (!_tiempoInicio) return '';
+  var seg = Math.floor((Date.now() - _tiempoInicio) / 1000);
+  var m = Math.floor(seg / 60), s = String(seg % 60).padStart(2, '0');
+  return ' (' + m + ':' + s + ' transcurridos)';
+}
+
+function finalizarDescarga(btn) {
+  detenerPolling();
+  btn.disabled   = false;
+  btn.textContent = '↻ Descargar del SAT';
+  _jobId = null;
+}
+
+function mostrarResultado(job, btn) {
+  finalizarDescarga(btn);
+  var datos = job.datos;
+  if (datos) renderDatos(datos);
+
+  var nE = job.emitidos  || 0;
+  var nR = job.recibidos || 0;
+
+  if (job.errores && job.errores.length > 0) {
+    var msgs = job.errores.map(function(e) {
+      return (e.tipo === 'E' ? 'Emitidas' : 'Recibidas') + ': ' + e.mensaje;
+    });
+    if (nE > 0 || nR > 0) {
+      mostrarMensaje('Descarga parcial — ' + nE + ' emitidas, ' + nR + ' recibidas. Aviso: ' + msgs.join(' | '), 'info');
+    } else {
+      mostrarMensaje('Sin datos descargados. ' + msgs.join(' | '), 'error');
+    }
+  } else {
+    mostrarMensaje('✅ Descarga completada: ' + nE + ' emitidas, ' + nR + ' recibidas.', 'ok');
+  }
+}
+
+// Polling cada 8 segundos mientras el job esté activo
+function iniciarPolling(btn) {
+  detenerPolling();
+  _tiempoInicio = Date.now();
+  _pollingTimer = setInterval(function() {
+    if (!_jobId) { detenerPolling(); return; }
+
+    fetch('/dashboard/api/estado-descarga/' + _jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(job) {
+        // Actualizar mensaje con el estado actual del SAT
+        var estadoTextos = {
+          iniciando:    '🔄 Conectando con el SAT...',
+          procesando_e: '📤 Procesando emitidos en el SAT...',
+          procesando_r: '📥 Procesando recibidos en el SAT...',
+          descargando:  '⬇️ Descargando paquetes...',
+          clasificando: '🔍 Clasificando CFDIs...',
+          listo:        '✅ Listo',
+          error:        '❌ Error'
+        };
+        var textoEstado = estadoTextos[job.estado] || job.estado;
+        mostrarMensaje(textoEstado + ' — ' + (job.progreso || '') + tiempoTranscurrido(), 'info');
+
+        if (job.estado === 'listo') {
+          mostrarResultado(job, btn);
+        } else if (job.estado === 'error') {
+          finalizarDescarga(btn);
+          mostrarMensaje('Error: ' + job.progreso, 'error');
+        }
+      })
+      .catch(function() {
+        // Error de red — seguir intentando
+      });
+  }, 8000);
+}
+
+// ── Modal de confirmación + botón Descargar del SAT ─────────────────────────
+function abrirModalConfirmar() {
+  document.getElementById('modalConfirmar').style.display = 'flex';
+}
+function cerrarModalConfirmar() {
+  document.getElementById('modalConfirmar').style.display = 'none';
+}
+
+// Mostrar modal al hacer clic en el botón principal
+document.getElementById('btnCargar').addEventListener('click', abrirModalConfirmar);
+
+// Cerrar modal si cancela
+document.getElementById('btnCancelarDescarga').addEventListener('click', cerrarModalConfirmar);
+
+// Cerrar modal si hace clic fuera del recuadro
+document.getElementById('modalConfirmar').addEventListener('click', function(e) {
+  if (e.target.id === 'modalConfirmar') cerrarModalConfirmar();
+});
+
+// CONFIRMAR descarga: cierra modal y lanza el proceso
+document.getElementById('btnConfirmarDescarga').addEventListener('click', function() {
+  cerrarModalConfirmar();
+  var btn = document.getElementById('btnCargar');
+  btn.disabled    = true;
+  btn.textContent = 'Descargando...';
+  mostrarMensaje('🔄 Iniciando descarga del SAT...', 'info');
+
+  // PASO 1: solicitar inicio del job (responde inmediatamente)
+  fetch('/dashboard/api/iniciar-descarga', { method: 'POST' })
+    .then(function(r) {
+      if (!r.ok) {
+        return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); });
+      }
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data.jobId) throw new Error('El servidor no devolvió un jobId.');
+      _jobId = data.jobId;
+      mostrarMensaje('🔄 Conectando con el SAT — el proceso corre en background, puedes seguir navegando...', 'info');
+      // PASO 2: polling automático cada 8 segundos
+      iniciarPolling(btn);
+    })
+    .catch(function(e) {
+      finalizarDescarga(btn);
+      mostrarMensaje('Error al iniciar descarga: ' + e.message, 'error');
+    });
+});
+</script>
+</body>
+</html>
