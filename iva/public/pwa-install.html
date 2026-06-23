@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Instalar IVA GDM</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="IVA GDM">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 2rem 1rem;
+      padding-top: max(2rem, env(safe-area-inset-top));
+      padding-bottom: max(2rem, env(safe-area-inset-bottom));
+    }
+    .wrap { max-width: 440px; margin: 0 auto; text-align: center; }
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 2rem;
+    }
+    .logo small {
+      display: block;
+      font-size: .85rem;
+      font-weight: 500;
+      color: #fbbf24;
+      margin-top: .3rem;
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+    .lead {
+      color: #cbd5e1;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+    .step {
+      background: rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin: .75rem 0;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .step-num {
+      background: #fbbf24;
+      color: #0f172a;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .step-text { line-height: 1.4; }
+    .btn {
+      display: inline-block;
+      margin-top: 2rem;
+      background: #fbbf24;
+      color: #0f172a;
+      padding: 1rem 2rem;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 800;
+      min-height: 44px;
+    }
+    .ios-tip {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: rgba(251,191,36,.1);
+      border-left: 3px solid #fbbf24;
+      border-radius: 8px;
+      font-size: .85rem;
+      text-align: left;
+      color: #fde68a;
+    }
+    .ios-tip strong { color: #fbbf24; display: block; margin-bottom: .25rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      IVA
+      <small>Grupo GDM High Consulting México</small>
+    </div>
+    <h1>📲 Instala la app en tu celular</h1>
+    <p class="lead">
+      Consulta tu IVA del SAT desde un acceso directo en la pantalla de inicio.
+    </p>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Toca el botón <strong>📲 Instalar app</strong> que aparecerá abajo.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Confirma <strong>Instalar</strong> en el cuadro de diálogo.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">El icono <strong>IVA GDM</strong> queda en tu pantalla de inicio.</div>
+    </div>
+
+    <a class="btn" href="/login">Entrar al portal →</a>
+
+    <div class="ios-tip">
+      <strong>📱 ¿Usas iPhone?</strong>
+      Toca el botón Compartir (⬆️) de Safari y selecciona <em>"Añadir a pantalla de inicio"</em>.
+    </div>
+  </div>
+  <script src="/js/pwa-register.js" defer></script>
+</body>
+</html>

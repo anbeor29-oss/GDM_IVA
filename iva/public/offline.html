@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sin conexión — IVA GDM</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1e3a8a">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .card { max-width: 400px; padding: 2rem; }
+    .icon { font-size: 4rem; margin-bottom: 1rem; }
+    h1 { margin: 0 0 .5rem; font-size: 1.5rem; }
+    p { color: #cbd5e1; line-height: 1.6; }
+    button {
+      margin-top: 1.5rem;
+      background: #fbbf24;
+      color: #0f172a;
+      border: none;
+      padding: .8rem 2rem;
+      border-radius: 50px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      min-height: 44px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>Sin conexión a internet</h1>
+    <p>
+      No podemos conectar al SAT en este momento.
+      Verifica tu conexión Wi-Fi o datos móviles e intenta de nuevo.
+    </p>
+    <button onclick="window.location.reload()">Reintentar</button>
+  </div>
+</body>
+</html>
