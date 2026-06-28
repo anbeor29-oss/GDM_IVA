@@ -37,7 +37,7 @@
 </div>
 
 <nav class="navbar">
-  <span class="marca" style="line-height:1.1">IVA<br><span style="font-size:.7rem;font-weight:500;opacity:.85">Grupo GDM High Consulting México</span></span>
+  <span class="marca" style="line-height:1.1">GDM<br><span style="font-size:.7rem;font-weight:500;opacity:.85">Grupo GDM High Consulting México</span></span>
   <span class="usuario" id="infoUsuario">Cargando...</span>
   <div style="display:flex;gap:1rem;align-items:center">
     <button class="btn-cargar" id="btnCargar">&#8635; Descargar del SAT</button>
@@ -45,7 +45,139 @@
   </div>
 </nav>
 
-<div class="dashboard-wrap">
+<!-- ════ Selector de Trámites ════ -->
+<div id="tramitesNav" style="background:#fff;border-bottom:1px solid #e2e8f0;padding:.75rem 1.5rem;display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;box-shadow:0 2px 4px rgba(0,0,0,.04)">
+  <button class="tab-tramite active" data-tab="iva" onclick="cambiarTab('iva')">
+    🧾 <strong>IVA</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Consulta mensual</span>
+  </button>
+  <button class="tab-tramite" data-tab="cif" onclick="cambiarTab('cif')">
+    📋 <strong>CIF</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Constancia Fiscal</span>
+  </button>
+  <button class="tab-tramite" data-tab="opinion" onclick="cambiarTab('opinion')">
+    ✅ <strong>Opinión 32-D</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Cumplimiento</span>
+  </button>
+</div>
+
+<style>
+  .tab-tramite {
+    background:#f1f5f9; color:#475569;
+    border:2px solid transparent;
+    padding:.7rem 1.25rem;
+    border-radius:10px;
+    font-size:.95rem; font-weight:600;
+    cursor:pointer; transition:all .15s;
+  }
+  .tab-tramite:hover { background:#e0e7ff; color:#1e3a8a; }
+  .tab-tramite.active { background:#1e3a8a; color:#fff; border-color:#fbbf24; }
+  .tramite-panel {
+    background:#fff; margin:1.5rem auto;
+    max-width:780px; padding:2.5rem 2rem;
+    border-radius:14px;
+    box-shadow:0 4px 12px rgba(0,0,0,.05);
+    border:1px solid #e2e8f0;
+  }
+  .tramite-icon { font-size:3.5rem; text-align:center; margin-bottom:1rem; }
+  .tramite-title {
+    font-size:1.6rem; font-weight:800; color:#0f172a;
+    text-align:center; margin-bottom:.5rem;
+  }
+  .tramite-subtitle {
+    color:#64748b; text-align:center;
+    margin-bottom:2rem; line-height:1.6;
+  }
+  .tramite-rfc-badge {
+    display:inline-block; background:#fef3c7; color:#92400e;
+    padding:.4rem 1rem; border-radius:50px;
+    font-weight:700; font-size:.9rem; margin-bottom:1.5rem;
+  }
+  .pasos-lista { background:#f8fafc; border-radius:10px; padding:1.25rem 1.5rem; margin:1.5rem 0; }
+  .paso {
+    display:flex; gap:1rem; align-items:flex-start;
+    padding:.75rem 0; border-bottom:1px dashed #cbd5e1;
+  }
+  .paso:last-child { border-bottom:none; }
+  .paso-num {
+    background:#1e3a8a; color:#fff;
+    width:32px; height:32px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; flex-shrink:0; font-size:.9rem;
+  }
+  .paso-texto { line-height:1.5; color:#334155; }
+  .paso-texto strong { color:#0f172a; }
+  .btn-portal-sat {
+    display:inline-flex; align-items:center; gap:.6rem;
+    background:#dc2626; color:#fff;
+    padding:1rem 2rem; border-radius:50px;
+    text-decoration:none; font-weight:700; font-size:1.05rem;
+    box-shadow:0 10px 25px -5px rgba(220,38,38,.4);
+    transition:transform .15s; margin-top:.5rem;
+  }
+  .btn-portal-sat:hover { transform:translateY(-2px); }
+  .nota-importante {
+    background:#fef3c7; border-left:4px solid #f59e0b;
+    padding:1rem 1.25rem; border-radius:8px;
+    margin-top:1.5rem; color:#78350f;
+    font-size:.9rem; line-height:1.5;
+  }
+</style>
+
+<!-- ════ Panel CIF ════ -->
+<div id="panel-cif" class="tramite-panel" style="display:none">
+  <div class="tramite-icon">📋</div>
+  <h2 class="tramite-title">Constancia de Situación Fiscal</h2>
+  <p class="tramite-subtitle">
+    Documento oficial del SAT con tus datos fiscales: RFC, régimen, domicilio, obligaciones registradas.
+    Vigente, listo para trámites bancarios, contratos, alta de proveedores, etc.
+  </p>
+  <div style="text-align:center">
+    <div class="tramite-rfc-badge">Tu RFC: <span id="cif-rfc">—</span></div>
+  </div>
+  <div class="pasos-lista">
+    <div class="paso"><div class="paso-num">1</div><div class="paso-texto">Toca el botón <strong>"Abrir portal del SAT"</strong> de abajo. Se abre en una pestaña nueva.</div></div>
+    <div class="paso"><div class="paso-num">2</div><div class="paso-texto">En el portal del SAT, ingresa con tu <strong>e.firma</strong> (.cer y .key) o tu <strong>CIEC</strong>.</div></div>
+    <div class="paso"><div class="paso-num">3</div><div class="paso-texto">Tu Constancia se descarga en <strong>PDF</strong> automáticamente, con código QR oficial.</div></div>
+    <div class="paso"><div class="paso-num">4</div><div class="paso-texto">Guarda el PDF y úsalo donde lo necesites. Vigencia: indefinida hasta que cambien tus datos fiscales.</div></div>
+  </div>
+  <div style="text-align:center">
+    <a class="btn-portal-sat" href="https://www.sat.gob.mx/aplicacion/login/53027/genera-tu-constancia-de-situacion-fiscal" target="_blank" rel="noopener">
+      🔗 Abrir portal del SAT para descargar
+    </a>
+  </div>
+  <div class="nota-importante">
+    🔒 <strong>Por seguridad,</strong> el SAT no permite que terceros descarguen tu Constancia automáticamente.
+    Tu e.firma siempre se ingresa <strong>directamente en sat.gob.mx</strong>, nunca compartimos tus credenciales con el SAT desde nuestro portal.
+  </div>
+</div>
+
+<!-- ════ Panel Opinión 32-D ════ -->
+<div id="panel-opinion" class="tramite-panel" style="display:none">
+  <div class="tramite-icon">✅</div>
+  <h2 class="tramite-title">Opinión de Cumplimiento de Obligaciones Fiscales</h2>
+  <p class="tramite-subtitle">
+    Documento oficial del SAT (Art. 32-D CFF) que indica si estás <strong>al corriente</strong> en tus obligaciones fiscales.
+    Requerido para licitaciones, contratos con gobierno, recibir subsidios, créditos bancarios.
+  </p>
+  <div style="text-align:center">
+    <div class="tramite-rfc-badge">Tu RFC: <span id="opinion-rfc">—</span></div>
+  </div>
+  <div class="pasos-lista">
+    <div class="paso"><div class="paso-num">1</div><div class="paso-texto">Toca el botón <strong>"Abrir portal del SAT"</strong> de abajo. Se abre en una pestaña nueva.</div></div>
+    <div class="paso"><div class="paso-num">2</div><div class="paso-texto">Ingresa con tu <strong>e.firma</strong> o <strong>RFC + Contraseña (CIEC)</strong>.</div></div>
+    <div class="paso"><div class="paso-num">3</div><div class="paso-texto">El SAT genera tu Opinión en <strong>PDF</strong> con sello digital y código de validación.</div></div>
+    <div class="paso"><div class="paso-num">4</div><div class="paso-texto">Resultados posibles: <strong style="color:#059669">Positivo</strong> (al corriente), <strong style="color:#dc2626">Negativo</strong> (con adeudo) o <strong style="color:#d97706">Sin obligaciones</strong>.</div></div>
+  </div>
+  <div style="text-align:center">
+    <a class="btn-portal-sat" href="https://www.sat.gob.mx/aplicacion/operacion/77949/genera-tu-opinion-del-cumplimiento-de-obligaciones-fiscales" target="_blank" rel="noopener">
+      🔗 Abrir portal del SAT para descargar
+    </a>
+  </div>
+  <div class="nota-importante">
+    💡 <strong>Vigencia:</strong> la Opinión positiva tiene validez de <strong>30 días naturales</strong>.
+    Si vas a usarla para un trámite, genérala con la fecha más cercana posible al trámite.
+  </div>
+</div>
+
+<div class="dashboard-wrap" id="panel-iva">
   <div id="msgEstado" style="display:none;padding:.5rem 1rem;font-size:.85rem;text-align:center"></div>
 
   <div class="paneles">
@@ -193,12 +325,32 @@ function renderDatos(d) {
   }
 }
 
+// ── Cambio de pestañas (IVA / CIF / Opinión 32-D) ──────────────────────────────
+function cambiarTab(tab) {
+  // Actualizar botones activos
+  document.querySelectorAll('.tab-tramite').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  // Mostrar/ocultar paneles
+  document.getElementById('panel-iva').style.display     = (tab === 'iva')     ? 'block' : 'none';
+  document.getElementById('panel-cif').style.display     = (tab === 'cif')     ? 'block' : 'none';
+  document.getElementById('panel-opinion').style.display = (tab === 'opinion') ? 'block' : 'none';
+  // Botón "Descargar del SAT" solo visible en IVA
+  document.getElementById('btnCargar').style.display = (tab === 'iva') ? '' : 'none';
+}
+
 // ── Cargar sesión ─────────────────────────────────────────────────────────────
 fetch('/dashboard/api/sesion')
   .then(function(r) { return r.json(); })
   .then(function(d) {
     document.getElementById('infoUsuario').textContent =
       (d.nombre || '') + ' | RFC: ' + (d.rfc || '') + ' | Día ' + (d.dia || '');
+    // Mostrar RFC en los paneles de CIF y Opinión
+    var rfc = d.rfc || '—';
+    var cifRfc = document.getElementById('cif-rfc');
+    var opinionRfc = document.getElementById('opinion-rfc');
+    if (cifRfc) cifRfc.textContent = rfc;
+    if (opinionRfc) opinionRfc.textContent = rfc;
   })
   .catch(function() {});
 
