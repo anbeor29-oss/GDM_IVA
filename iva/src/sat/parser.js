@@ -6,11 +6,11 @@ const path = require('path');
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-  parseAttributeValue: false,   // false: mantiene "002" como string, no lo convierte a número 2
+  parseAttributeValue: false,   // false: mantiene "002" como string, no lo convierte a nÃºmero 2
   allowBooleanAttributes: true
 });
 
-// ── Extrae IVA del nodo Impuestos principal (I+PUE y E) ────────────────────────
+// â”€â”€ Extrae IVA del nodo Impuestos principal (I+PUE y E) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function extraerIVAImpuestos(comp) {
   const impuestos = comp['cfdi:Impuestos'] || comp['Impuestos'] || {};
   const traslados = impuestos['cfdi:Traslados']?.['cfdi:Traslado']
@@ -32,7 +32,7 @@ function extraerIVAImpuestos(comp) {
   return iva;
 }
 
-// ── Extrae IVA y montos del Complemento de Pagos 2.0 (Tipo P / REP) ──────────
+// â”€â”€ Extrae IVA y montos del Complemento de Pagos 2.0 (Tipo P / REP) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Retorna { iva, base, monto } donde:
 //   iva   = IVA efectivamente cobrado/pagado en el pago
 //   base  = base gravable (TotalTrasladosBaseIVA16 + IVA8)
@@ -42,7 +42,7 @@ function extraerDatosREP(complemento) {
   const pagos = complemento['pago20:Pagos'] || complemento['pago10:Pagos']
               || complemento['Pagos'] || {};
 
-  // Forma rápida: leer Totales directamente (disponible en pago20)
+  // Forma rÃ¡pida: leer Totales directamente (disponible en pago20)
   const totales = pagos['pago20:Totales'] || pagos['pago10:Totales']
                 || pagos['Totales'] || {};
 
@@ -91,7 +91,7 @@ function extraerDatosREP(complemento) {
   return { iva: ivaTotal, base: baseTotal, monto: montoTotal };
 }
 
-// ── Parser principal de un CFDI individual ─────────────────────────────────────
+// â”€â”€ Parser principal de un CFDI individual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function parseCFDI(xmlContent, tipo) {
   let doc;
   try { doc = parser.parse(xmlContent); } catch (_) { return null; }
@@ -105,7 +105,7 @@ function parseCFDI(xmlContent, tipo) {
   // Tipos que nunca generan IVA efectivo
   if (tipoComp === 'T' || tipoComp === 'N') return null;
 
-  // I + PPD: el IVA se difiere — se reconoce cuando el pagador emite el REP (Tipo P)
+  // I + PPD: el IVA se difiere â€” se reconoce cuando el pagador emite el REP (Tipo P)
   if (tipoComp === 'I' && metodoPago === 'PPD') return null;
 
   const emisor      = comp['cfdi:Emisor']      || comp['Emisor']      || {};
@@ -126,18 +126,18 @@ function parseCFDI(xmlContent, tipo) {
     subtotalCalc = Math.round(rep.base  * 100) / 100;   // base gravable del pago
     totalCalc    = Math.round(rep.monto * 100) / 100;   // monto total del pago
   } else {
-    // I + PUE  y  E (Egreso / Nota de crédito): IVA del nodo Impuestos principal
+    // I + PUE  y  E (Egreso / Nota de crÃ©dito): IVA del nodo Impuestos principal
     ivaTraslado = extraerIVAImpuestos(comp);
   }
 
   if (ivaTraslado === 0) return null;
 
-  // Egreso (nota de crédito / devolución): el IVA RESTA al acumulado del mes
+  // Egreso (nota de crÃ©dito / devoluciÃ³n): el IVA RESTA al acumulado del mes
   if (tipoComp === 'E') ivaTraslado = -Math.abs(ivaTraslado);
 
   // Etiqueta legible para el dashboard
   const etiquetaTipo = tipoComp === 'P' ? 'REP'
-    : tipoComp === 'E' ? 'N.Créd'
+    : tipoComp === 'E' ? 'N.CrÃ©d'
     : `${tipoComp}/${metodoPago || 'PUE'}`;
 
   return {
@@ -181,9 +181,9 @@ function parseCarpeta(dir, tipo) {
 
 function calcularIVA(tempXmlPath, rfc) {
   const now  = new Date();
-  // Usar SIEMPRE el mes en curso (evita mostrar mes anterior el día 1)
-  // El día 1: mes en curso está vacío → muestra tablas vacías (correcto)
-  // Del día 2 en adelante: muestra CFDIs del mes en curso
+  // Usar SIEMPRE el mes en curso (evita mostrar mes anterior el dÃ­a 1)
+  // El dÃ­a 1: mes en curso estÃ¡ vacÃ­o â†’ muestra tablas vacÃ­as (correcto)
+  // Del dÃ­a 2 en adelante: muestra CFDIs del mes en curso
   const mes  = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
   const base = path.join(tempXmlPath, rfc, mes);
 
@@ -192,7 +192,7 @@ function calcularIVA(tempXmlPath, rfc) {
 
   // IVA Trasladado  = cobrado a clientes  (emitidos: I/PUE + REPs emitidos)
   // IVA Acreditable = pagado a proveedores (recibidos: I/PUE + REPs recibidos)
-  // Los Egresos (N.Créd) tienen iva negativo → restan automáticamente
+  // Los Egresos (N.CrÃ©d) tienen iva negativo â†’ restan automÃ¡ticamente
   const ivaTraslado    = Math.round(emitidos.reduce( (s, c) => s + c.iva, 0) * 100) / 100;
   const ivaAcreditable = Math.round(recibidos.reduce((s, c) => s + c.iva, 0) * 100) / 100;
   const resultado      = Math.round((ivaTraslado - ivaAcreditable) * 100) / 100;
