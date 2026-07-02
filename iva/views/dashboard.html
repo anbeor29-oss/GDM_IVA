@@ -47,13 +47,13 @@
 
 <!-- ════ Selector de Trámites ════ -->
 <div id="tramitesNav" style="background:#fff;border-bottom:1px solid #e2e8f0;padding:.75rem 1.5rem;display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;box-shadow:0 2px 4px rgba(0,0,0,.04)">
-  <button class="tab-tramite active" data-tab="iva" onclick="cambiarTab('iva')">
+  <button class="tab-tramite active" data-tab="iva" data-tab-click="iva">
     🧾 <strong>IVA</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Consulta mensual</span>
   </button>
-  <button class="tab-tramite" data-tab="cif" onclick="cambiarTab('cif')">
+  <button class="tab-tramite" data-tab="cif" data-tab-click="cif">
     📋 <strong>CIF</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Constancia Fiscal</span>
   </button>
-  <button class="tab-tramite" data-tab="opinion" onclick="cambiarTab('opinion')">
+  <button class="tab-tramite" data-tab="opinion" data-tab-click="opinion">
     ✅ <strong>Opinión 32-D</strong> <span style="font-weight:400;font-size:.85rem;opacity:.85">— Cumplimiento</span>
   </button>
 </div>
@@ -327,16 +327,41 @@ function renderDatos(d) {
 
 // ── Cambio de pestañas (IVA / CIF / Opinión 32-D) ──────────────────────────────
 function cambiarTab(tab) {
+  console.log('[cambiarTab] Cambiando a:', tab);
   // Actualizar botones activos
   document.querySelectorAll('.tab-tramite').forEach(function(b) {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
-  // Mostrar/ocultar paneles
-  document.getElementById('panel-iva').style.display     = (tab === 'iva')     ? 'block' : 'none';
-  document.getElementById('panel-cif').style.display     = (tab === 'cif')     ? 'block' : 'none';
-  document.getElementById('panel-opinion').style.display = (tab === 'opinion') ? 'block' : 'none';
+  // Mostrar/ocultar paneles con verificación defensiva
+  var pIva = document.getElementById('panel-iva');
+  var pCif = document.getElementById('panel-cif');
+  var pOpi = document.getElementById('panel-opinion');
+  if (pIva) pIva.style.display = (tab === 'iva')     ? 'block' : 'none';
+  if (pCif) pCif.style.display = (tab === 'cif')     ? 'block' : 'none';
+  if (pOpi) pOpi.style.display = (tab === 'opinion') ? 'block' : 'none';
   // Botón "Descargar del SAT" solo visible en IVA
-  document.getElementById('btnCargar').style.display = (tab === 'iva') ? '' : 'none';
+  var btn = document.getElementById('btnCargar');
+  if (btn) btn.style.display = (tab === 'iva') ? '' : 'none';
+}
+
+// Registrar event listeners para las pestañas (más robusto que onclick inline)
+// Se dispara al terminar de cargar el DOM y también inmediatamente si ya está listo
+function registrarListenersTabs() {
+  var botones = document.querySelectorAll('[data-tab-click]');
+  console.log('[registrarListenersTabs] Botones encontrados:', botones.length);
+  botones.forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var tab = this.getAttribute('data-tab-click');
+      cambiarTab(tab);
+    });
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', registrarListenersTabs);
+} else {
+  registrarListenersTabs();
 }
 
 // ── Cargar sesión ─────────────────────────────────────────────────────────────
