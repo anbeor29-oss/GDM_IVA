@@ -133,15 +133,32 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
   const { calcularIVA }   = require('./parser');
 
   try {
-    // Calcular periodo: del día 1 del mes hasta ayer
+    // Calcular periodo:
+    //  - MES: siempre el mes en curso (donde se guardan y consultan los CFDIs)
+    //  - Rango de descarga: día 1 del mes en curso → ayer (SAT no acepta el día en curso)
+    //  - Caso especial día 1: no hay datos aún del mes en curso, descarga TODO el mes anterior
     const now   = new Date();
     const ayer  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const nowY  = now.getFullYear();
+    const nowM  = String(now.getMonth() + 1).padStart(2, '0');
     const ayerY = ayer.getFullYear();
     const ayerM = String(ayer.getMonth() + 1).padStart(2, '0');
     const ayerD = String(ayer.getDate()).padStart(2, '0');
-    const fi    = `${ayerY}-${ayerM}-01T00:00:00`;
-    const ff    = `${ayerY}-${ayerM}-${ayerD}T23:59:59`;
-    const base  = path.join(tempXmlPath.replace(/\\/g, '/'), rfc, `${ayerY}${ayerM}`);
+
+    // Si estamos día 1: descarga el mes anterior completo, guarda como mes actual
+    //                   (para que se muestre en el dashboard del mes en curso)
+    // Del día 2 en adelante: descarga desde el día 1 del mes hasta ayer
+    let fi, ff;
+    if (now.getDate() === 1) {
+      fi = `${ayerY}-${ayerM}-01T00:00:00`;
+      ff = `${ayerY}-${ayerM}-${ayerD}T23:59:59`;
+    } else {
+      fi = `${nowY}-${nowM}-01T00:00:00`;
+      ff = `${ayerY}-${ayerM}-${ayerD}T23:59:59`;
+    }
+
+    // La carpeta destino es SIEMPRE la del mes en curso (coincide con calcularIVA)
+    const base  = path.join(tempXmlPath.replace(/\\/g, '/'), rfc, `${nowY}${nowM}`);
 
     log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} → ${ff}`);
     actualizarJob(jobId, { estado: 'iniciando', progreso: `Conectando al SAT (${fi} a ${ff})...` });
