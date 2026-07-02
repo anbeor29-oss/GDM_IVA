@@ -181,11 +181,10 @@ function parseCarpeta(dir, tipo) {
 
 function calcularIVA(tempXmlPath, rfc) {
   const now  = new Date();
-  // Usar el mes de AYER para coincidir con downloadCFDIs
-  // Ej: hoy 1-jun → ayer 31-may → carpeta 202605 (todo mayo)
-  //     hoy 4-jun → ayer 3-jun  → carpeta 202606 (junio hasta ayer)
-  const ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  const mes  = `${ayer.getFullYear()}${String(ayer.getMonth() + 1).padStart(2, '0')}`;
+  // Usar SIEMPRE el mes en curso (evita mostrar mes anterior el día 1)
+  // El día 1: mes en curso está vacío → muestra tablas vacías (correcto)
+  // Del día 2 en adelante: muestra CFDIs del mes en curso
+  const mes  = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
   const base = path.join(tempXmlPath, rfc, mes);
 
   const emitidos  = parseCarpeta(path.join(base, 'emitidos'),  'emitido');
