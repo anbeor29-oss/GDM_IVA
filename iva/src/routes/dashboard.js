@@ -16,51 +16,51 @@ function requireAuth(req, res, next) {
   res.redirect('/login');
 }
 
-// MODO PRUEBA: sin restricción de fechas — cambiar a true en producción
+// MODO PRUEBA: sin restricciÃ³n de fechas â€” cambiar a true en producciÃ³n
 const MODO_PRODUCCION = false;
 function dentroDeVentana() {
   if (!MODO_PRODUCCION) return true;
   const dia = new Date().getDate();
-  return dia >= 10 && dia <= 29;
+  return dia >= 3 && dia <= 28;
 }
 
-// ── Página del dashboard ──────────────────────────────────────────────────────
+// â”€â”€ PÃ¡gina del dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/', requireAuth, (req, res) => {
   if (!dentroDeVentana()) return res.redirect('/login?error=ventana');
   res.sendFile(path.join(__dirname, '..', '..', 'views', 'dashboard.html'));
 });
 
-// ── PASO 1: Iniciar descarga en background (retorna inmediatamente) ────────────
+// â”€â”€ PASO 1: Iniciar descarga en background (retorna inmediatamente) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // El cliente recibe un jobId y hace polling con /api/estado-descarga/:jobId
 router.post('/api/iniciar-descarga', requireAuth, satLimiter, (req, res) => {
   if (!dentroDeVentana()) {
-    return res.status(403).json({ error: 'Fuera de ventana de consulta (días 10-29)' });
+    return res.status(403).json({ error: 'Fuera de ventana de consulta (dÃ­as 10-29)' });
   }
 
   const { rfc, cerPath, keyPath, efirmaPassword } = req.session;
 
   if (!cerPath || !keyPath || !efirmaPassword) {
-    return res.status(400).json({ error: 'Faltan credenciales de e-firma en la sesión.' });
+    return res.status(400).json({ error: 'Faltan credenciales de e-firma en la sesiÃ³n.' });
   }
 
   const job = crearJob(rfc);
   log(`[Job ${job.id}] Iniciado por usuario ${req.session.nombre} RFC=${rfc}`);
 
-  // Lanzar descarga en background — NO esperamos aquí
+  // Lanzar descarga en background â€” NO esperamos aquÃ­
   ejecutarDescargaJob(job.id, {
     cerPath, keyPath, password: efirmaPassword, rfc, tempXmlPath: TEMP_XML_PATH
-  }).catch(e => log(`[Job ${job.id}] Excepción no capturada: ${e.message}`));
+  }).catch(e => log(`[Job ${job.id}] ExcepciÃ³n no capturada: ${e.message}`));
 
   // Responder inmediatamente con el jobId
   res.json({ ok: true, jobId: job.id, estado: 'iniciando' });
 });
 
-// ── PASO 2: Consultar estado del job (polling del cliente cada 10s) ───────────
+// â”€â”€ PASO 2: Consultar estado del job (polling del cliente cada 10s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/api/estado-descarga/:jobId', requireAuth, (req, res) => {
   const job = obtenerJob(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Job no encontrado o expirado.' });
 
-  // No enviar los datos completos de CFDIs en cada poll — solo cuando esté listo
+  // No enviar los datos completos de CFDIs en cada poll â€” solo cuando estÃ© listo
   const { datos, ...jobSinDatos } = job;
   if (job.estado === 'listo') {
     res.json({ ...jobSinDatos, datos });
@@ -69,10 +69,10 @@ router.get('/api/estado-descarga/:jobId', requireAuth, (req, res) => {
   }
 });
 
-// ── Leer XMLs ya descargados en disco (sin ir al SAT) ─────────────────────────
+// â”€â”€ Leer XMLs ya descargados en disco (sin ir al SAT) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/api/datos', requireAuth, (req, res) => {
   if (!dentroDeVentana()) {
-    return res.status(403).json({ error: 'Fuera de ventana de consulta (días 10-29)' });
+    return res.status(403).json({ error: 'Fuera de ventana de consulta (dÃ­as 10-29)' });
   }
   try {
     const rfc  = req.session.rfc;
@@ -87,7 +87,7 @@ router.get('/api/datos', requireAuth, (req, res) => {
   }
 });
 
-// ── Info de sesión ────────────────────────────────────────────────────────────
+// â”€â”€ Info de sesiÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/api/sesion', requireAuth, (req, res) => {
   res.json({
     nombre: req.session.nombre,
@@ -96,7 +96,7 @@ router.get('/api/sesion', requireAuth, (req, res) => {
   });
 });
 
-// ── Diagnóstico ───────────────────────────────────────────────────────────────
+// â”€â”€ DiagnÃ³stico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/api/debug', requireAuth, (req, res) => {
   const fs  = require('fs');
   const tp  = process.env.TEMP_XML_PATH || 'C:/temp2xml';
