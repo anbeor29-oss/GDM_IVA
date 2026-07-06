@@ -7,7 +7,7 @@ const router = express.Router();
 const { getUsuarioByUsername, decryptPassword } = require('../db/database');
 
 // MODO PRUEBA: sin restricciÃ³n de fechas â€” cambiar a true en producciÃ³n
-const MODO_PRODUCCION = false;
+const MODO_PRODUCCION = true;
 function dentroDeVentana() {
   if (!MODO_PRODUCCION) return true;
   const dia = new Date().getDate();
