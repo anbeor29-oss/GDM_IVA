@@ -8,7 +8,7 @@ const {
 } = require('@nodecfdi/sat-ws-descarga-masiva');
 const { log } = require('../security/attackHandler');
 
-// â”€â”€ Crear servicio SAT con las credenciales del usuario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Crear servicio SAT con las credenciales del usuario Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function crearServicio(cerPath, keyPath, password) {
   const fiel = Fiel.create(
     fs.readFileSync(cerPath, 'binary'),
@@ -17,12 +17,54 @@ function crearServicio(cerPath, keyPath, password) {
   );
 
   if (!fiel.isValid()) {
-    throw new Error('La e.firma (FIEL) no es vÃ¡lida o estÃ¡ vencida.');
+    throw new Error('La e.firma (FIEL) no es vÃƒÂ¡lida o estÃƒÂ¡ vencida.');
   }
 
   const requestBuilder = new FielRequestBuilder(fiel);
   const webClient      = new HttpsWebClient();
   return new Service(requestBuilder, webClient, null, ServiceEndpoints.cfdi());
+}
+
+// â”€â”€ Wrapper defensivo para llamadas al SDK oficial â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// El SDK @nodecfdi puede lanzar errores con `webError.getResponse is not a function`
+// cuando el SAT devuelve algo inesperado (timeout, error de red, formato raro).
+// Este wrapper captura ese caso y reintenta con delay antes de rendirse.
+async function llamarSATConReintento(nombreOp, fn, maxIntentos = 3) {
+  let ultimoError = null;
+  for (let i = 1; i <= maxIntentos; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      ultimoError = err;
+      const msg = err && err.message ? err.message : String(err);
+      log(`[SAT] Error en ${nombreOp} (intento ${i}/${maxIntentos}): ${msg}`);
+
+      // Errores conocidos del SDK que valen la pena reintentar
+      const esErrorSDK = msg.includes('getResponse is not a function') ||
+                        msg.includes('ECONNRESET') ||
+                        msg.includes('ETIMEDOUT') ||
+                        msg.includes('socket hang up') ||
+                        msg.includes('network') ||
+                        msg.includes('timeout');
+
+      if (!esErrorSDK || i === maxIntentos) {
+        // No es error recuperable, o ya se agotaron reintentos
+        break;
+      }
+
+      // Espera exponencial antes de reintentar: 5s, 10s, 20s...
+      const delayMs = 5000 * Math.pow(2, i - 1);
+      log(`[SAT] Reintentando en ${delayMs / 1000}s...`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+
+  // Traducir el error a algo Ãºtil para el usuario
+  const msg = ultimoError && ultimoError.message ? ultimoError.message : String(ultimoError);
+  if (msg.includes('getResponse is not a function')) {
+    throw new Error(`El SAT no respondiÃ³ correctamente durante ${nombreOp}. Puede ser intermitencia del portal SAT o rango de fechas invÃ¡lido. Intenta de nuevo en unos minutos.`);
+  }
+  throw ultimoError;
 }
 
 // â”€â”€ Solicitar + verificar + descargar un tipo (E o R) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -38,10 +80,13 @@ async function descargarTipo(service, rfc, period, tipo, destDir, onProgreso) {
   // Para R (recibidos) el SAT requiere DocumentStatus('active') o devuelve 301.
   // Para E (emitidos) funciona sin DocumentStatus.
   let queryParams = QueryParameters.create(period, downloadType, requestType);
-  // Siempre solicitar solo vigentes (active) â€” evita el error 301 del SAT
+  // Siempre solicitar solo vigentes (active) Ã¢â‚¬â€ evita el error 301 del SAT
   const { DocumentStatus } = require('@nodecfdi/sat-ws-descarga-masiva');
   queryParams = queryParams.withDocumentStatus(new DocumentStatus('active'));
-  const queryResult = await service.query(queryParams);
+  const queryResult = await llamarSATConReintento(
+    `solicitar ${tipo}`,
+    () => service.query(queryParams)
+  );
 
   const statusCode = queryResult.getStatus().getCode();
   const requestId  = queryResult.getRequestId();
@@ -50,18 +95,21 @@ async function descargarTipo(service, rfc, period, tipo, destDir, onProgreso) {
   log(`[SAT] Solicitud ${tipo}: status=${statusCode} requestId=${requestId} msg=${message}`);
 
   if (statusCode !== 5000 || !requestId) {
-    throw new Error(`SAT rechazÃ³ solicitud ${tipo}: cÃ³digo=${statusCode} mensaje=${message}`);
+    throw new Error(`SAT rechazÃƒÂ³ solicitud ${tipo}: cÃƒÂ³digo=${statusCode} mensaje=${message}`);
   }
 
-  // PASO 2: Verificar hasta que estÃ© lista (polling)
+  // PASO 2: Verificar hasta que estÃƒÂ© lista (polling)
   let intentos = 0;
-  const maxIntentos = 50;  // ~25 minutos (50 Ã— 30s)
+  const maxIntentos = 50;  // ~25 minutos (50 Ãƒâ€” 30s)
 
   while (intentos < maxIntentos) {
     intentos++;
     if (onProgreso) onProgreso(`${tipo === 'E' ? 'Emitidos' : 'Recibidos'}: verificando (intento ${intentos})...`);
 
-    const verifyResult = await service.verify(requestId);
+    const verifyResult = await llamarSATConReintento(
+      `verificar ${tipo}`,
+      () => service.verify(requestId)
+    );
     const statusReq    = verifyResult.getStatusRequest().getValue();
     const codeStatus   = verifyResult.getCodeRequest().getValue();
     const packagesIds  = verifyResult.getPackageIds();
@@ -83,7 +131,10 @@ async function descargarTipo(service, rfc, period, tipo, destDir, onProgreso) {
 
       for (const packageId of packagesIds) {
         log(`[SAT] Descargando paquete ${packageId}...`);
-        const downloadResult = await service.download(packageId);
+        const downloadResult = await llamarSATConReintento(
+          `descargar paquete ${packageId}`,
+          () => service.download(packageId)
+        );
 
         if (downloadResult.getStatus().getCode() !== 5000) {
           log(`[SAT] Error descargando paquete ${packageId}: ${downloadResult.getStatus().getMessage()}`);
@@ -109,7 +160,7 @@ async function descargarTipo(service, rfc, period, tipo, destDir, onProgreso) {
 
         // Limpiar ZIP temporal
         try { fs.unlinkSync(zipPath); } catch (_) {}
-        log(`[SAT] Paquete ${packageId}: ${entries.length} archivos â†’ ${totalXmls} XMLs en ${destDir}`);
+        log(`[SAT] Paquete ${packageId}: ${entries.length} archivos Ã¢â€ â€™ ${totalXmls} XMLs en ${destDir}`);
       }
 
       return totalXmls;
@@ -117,17 +168,17 @@ async function descargarTipo(service, rfc, period, tipo, destDir, onProgreso) {
 
     // Rechazada
     if (statusReq === 4 || statusReq === 5) {
-      throw new Error(`SAT rechazÃ³ ${tipo}: statusReq=${statusReq} code=${codeStatus}. ${statusReq === 5 ? 'Posible lÃ­mite diario excedido.' : ''}`);
+      throw new Error(`SAT rechazÃƒÂ³ ${tipo}: statusReq=${statusReq} code=${codeStatus}. ${statusReq === 5 ? 'Posible lÃƒÂ­mite diario excedido.' : ''}`);
     }
 
-    // En proceso (statusReq 1 o 2) â€” esperar 30 segundos
+    // En proceso (statusReq 1 o 2) Ã¢â‚¬â€ esperar 30 segundos
     await new Promise(r => setTimeout(r, 30000));
   }
 
-  throw new Error(`Timeout: el SAT tardÃ³ mÃ¡s de 25 min en procesar ${tipo === 'E' ? 'emitidos' : 'recibidos'}.`);
+  throw new Error(`Timeout: el SAT tardÃƒÂ³ mÃƒÂ¡s de 25 min en procesar ${tipo === 'E' ? 'emitidos' : 'recibidos'}.`);
 }
 
-// â”€â”€ Punto de entrada: ejecutar descarga en background para un job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Punto de entrada: ejecutar descarga en background para un job Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tempXmlPath }) {
   const { actualizarJob } = require('../jobs/manager');
   const { calcularIVA }   = require('./parser');
@@ -135,8 +186,8 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
   try {
     // Calcular periodo:
     //  - MES: siempre el mes en curso (donde se guardan y consultan los CFDIs)
-    //  - Rango de descarga: dÃ­a 1 del mes en curso â†’ ayer (SAT no acepta el dÃ­a en curso)
-    //  - Caso especial dÃ­a 1: no hay datos aÃºn del mes en curso, descarga TODO el mes anterior
+    //  - Rango de descarga: dÃƒÂ­a 1 del mes en curso Ã¢â€ â€™ ayer (SAT no acepta el dÃƒÂ­a en curso)
+    //  - Caso especial dÃƒÂ­a 1: no hay datos aÃƒÂºn del mes en curso, descarga TODO el mes anterior
     const now   = new Date();
     const ayer  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const nowY  = now.getFullYear();
@@ -145,9 +196,9 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
     const ayerM = String(ayer.getMonth() + 1).padStart(2, '0');
     const ayerD = String(ayer.getDate()).padStart(2, '0');
 
-    // Si estamos dÃ­a 1: descarga el mes anterior completo, guarda como mes actual
+    // Si estamos dÃƒÂ­a 1: descarga el mes anterior completo, guarda como mes actual
     //                   (para que se muestre en el dashboard del mes en curso)
-    // Del dÃ­a 2 en adelante: descarga desde el dÃ­a 1 del mes hasta ayer
+    // Del dÃƒÂ­a 2 en adelante: descarga desde el dÃƒÂ­a 1 del mes hasta ayer
     let fi, ff;
     if (now.getDate() === 1) {
       fi = `${ayerY}-${ayerM}-01T00:00:00`;
@@ -160,7 +211,7 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
     // La carpeta destino es SIEMPRE la del mes en curso (coincide con calcularIVA)
     const base  = path.join(tempXmlPath.replace(/\\/g, '/'), rfc, `${nowY}${nowM}`);
 
-    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} â†’ ${ff}`);
+    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} Ã¢â€ â€™ ${ff}`);
     actualizarJob(jobId, { estado: 'iniciando', progreso: `Conectando al SAT (${fi} a ${ff})...` });
 
     // Crear servicio con el paquete oficial @nodecfdi
@@ -170,7 +221,7 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
     let emitidos = 0, recibidos = 0;
     const errores = [];
 
-    // â”€â”€ Emitidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Emitidos Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     try {
       actualizarJob(jobId, { estado: 'procesando_e', progreso: 'SAT: solicitando emitidos...' });
       emitidos = await descargarTipo(
@@ -186,7 +237,7 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
       actualizarJob(jobId, { errores: [...errores] });
     }
 
-    // â”€â”€ Recibidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Recibidos Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     try {
       actualizarJob(jobId, { estado: 'procesando_r', progreso: 'SAT: solicitando recibidos...' });
       recibidos = await descargarTipo(
@@ -202,7 +253,7 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
       actualizarJob(jobId, { errores: [...errores] });
     }
 
-    // â”€â”€ Clasificar y calcular IVA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Clasificar y calcular IVA Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     actualizarJob(jobId, { estado: 'clasificando', progreso: 'Clasificando CFDIs y calculando IVA...' });
     const datos = calcularIVA(tempXmlPath, rfc);
     log(`[Job ${jobId}] Listo: emitidos=${datos.emitidos.length} recibidos=${datos.recibidos.length} IVA=${datos.resultado}`);
