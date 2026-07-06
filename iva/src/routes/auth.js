@@ -6,12 +6,12 @@ const router = express.Router();
 
 const { getUsuarioByUsername, decryptPassword } = require('../db/database');
 
-// MODO PRUEBA: sin restricción de fechas — cambiar a true en producción
+// MODO PRUEBA: sin restricciÃ³n de fechas â€” cambiar a true en producciÃ³n
 const MODO_PRODUCCION = false;
 function dentroDeVentana() {
   if (!MODO_PRODUCCION) return true;
   const dia = new Date().getDate();
-  return dia >= 10 && dia <= 29;
+  return dia >= 3 && dia <= 28;
 }
 
 router.get('/login', (req, res) => {
@@ -35,7 +35,7 @@ router.post('/login', (req, res) => {
     return res.redirect('/login?error=efirma');
   }
 
-  // Cargar datos e-firma en sesión (contraseña descifrada en RAM)
+  // Cargar datos e-firma en sesiÃ³n (contraseÃ±a descifrada en RAM)
   req.session.userId = usuario.id;
   req.session.nombre = usuario.nombre;
   req.session.rfc = usuario.rfc;
