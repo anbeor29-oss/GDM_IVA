@@ -21,7 +21,7 @@ const MODO_PRODUCCION = false;
 function dentroDeVentana() {
   if (!MODO_PRODUCCION) return true;
   const dia = new Date().getDate();
-  return dia >= 3 && dia <= 28;
+  return dia >= 3 && dia <= 29;
 }
 
 // â”€â”€ PÃ¡gina del dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
