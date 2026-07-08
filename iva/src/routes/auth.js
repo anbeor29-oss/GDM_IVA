@@ -11,7 +11,7 @@ const MODO_PRODUCCION = true;
 function dentroDeVentana() {
   if (!MODO_PRODUCCION) return true;
   const dia = new Date().getDate();
-  return dia >= 3 && dia <= 28;
+  return dia >= 3 && dia <= 29;
 }
 
 router.get('/login', (req, res) => {
