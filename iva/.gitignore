@@ -1,0 +1,17 @@
+# Dependencias (Render las instala con `npm install --production`)
+node_modules/
+
+# Datos y secretos (en Render: disco persistente + variables de entorno)
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+
+# e.firmas subidas (en Render: UPLOADS_DIR=/var/data/efirmas)
+uploads/
+
+# Logs y estado de runtime
+logs/
+blocked-ips.json

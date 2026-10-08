@@ -41,6 +41,8 @@
   <span class="usuario" id="infoUsuario">Cargando...</span>
   <div style="display:flex;gap:1rem;align-items:center">
     <button class="btn-cargar" id="btnCargar">&#8635; Descargar del SAT</button>
+    <a href="/dashboard/exportar" class="btn-cargar" style="background:#16a34a;text-decoration:none"
+       title="Descargar el detalle y el resumen de IVA en Excel (.xlsx)">&#8595; Excel</a>
     <a href="/logout">Salir</a>
   </div>
 </nav>
@@ -137,6 +139,16 @@ function mostrarMensaje(texto, tipo) {
   if (tipo === 'error') { msg.style.background = '#fef2f2'; msg.style.color = '#991b1b'; }
   if (tipo === 'info')  { msg.style.background = '#eff6ff'; msg.style.color = '#1d4ed8'; }
 }
+
+// Aviso de prueba / vigencia (comercialización): consultas o días restantes.
+fetch('/dashboard/api/estado-cuenta').then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
+  if (!d) return;
+  if (d.estado === 'PRUEBA' && d.pruebasRestantes != null) {
+    mostrarMensaje('Cuenta de prueba: te quedan ' + d.pruebasRestantes + ' consulta(s) gratis. Después, suscripción $500 + IVA al año (con Excel).', 'info');
+  } else if (d.diasRestantes != null && d.diasRestantes <= 30) {
+    mostrarMensaje('Tu suscripción vence en ' + d.diasRestantes + ' día(s). Renueva para no perder el acceso.', 'info');
+  }
+}).catch(function(){});
 
 // ── Renderizado de tablas ──────────────────────────────────────────────────────
 function renderTabla(bodyId, filas, ladoEmpresa) {

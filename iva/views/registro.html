@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear cuenta de prueba — IVA Grupo GDM High Consulting México</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1rem; color:#1f2937; }
+    .card { background:#fff; border-radius:16px; width:100%; max-width:640px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,.4); }
+    .head { background:#15233b; color:#fff; padding:1.1rem 1.5rem; display:flex; align-items:center; gap:.7rem; font-size:1.15rem; font-weight:700; }
+    .head .ic { width:34px; height:34px; border-radius:8px; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; }
+    .accent { height:4px; background:linear-gradient(90deg,#2563eb,#14b8a6); }
+    .body { padding:1.6rem 1.5rem; }
+    label { display:block; font-size:.82rem; font-weight:600; color:#334155; margin:0 0 .35rem; }
+    label .req { color:#e11d48; }
+    input, select { width:100%; padding:.7rem .8rem; border:1px solid #cbd5e1; border-radius:9px; font-size:.95rem; margin-bottom:1rem; background:#fff; }
+    input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .hint { font-size:.78rem; color:#64748b; margin:-.6rem 0 1rem; }
+    .btn { width:100%; border:none; border-radius:10px; padding:.95rem; color:#fff; font-size:1rem; font-weight:700; cursor:pointer; background:linear-gradient(90deg,#2563eb,#14b8a6); display:flex; align-items:center; justify-content:center; gap:.5rem; }
+    .btn:hover { filter:brightness(1.05); }
+    .pie { text-align:center; margin-top:1rem; font-size:.9rem; color:#475569; }
+    .pie a { color:#2563eb; font-weight:600; text-decoration:none; }
+    .alerta { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; padding:.7rem .9rem; border-radius:9px; font-size:.88rem; margin-bottom:1rem; display:none; }
+    @media(max-width:520px){ .row{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head"><span class="ic">📄</span> Datos de Facturación</div>
+    <div class="accent"></div>
+    <div class="body">
+      <div id="alerta" class="alerta"></div>
+      <form method="POST" action="/registro">
+        <label>📇 Nombre / Razón Social <span class="req">*</span></label>
+        <input type="text" name="nombre" placeholder="GRUPO HCGM S.A. DE C.V." required autofocus>
+
+        <div class="row">
+          <div>
+            <label>📄 RFC <span class="req">*</span></label>
+            <input type="text" name="rfc" placeholder="XAXX010101000" maxlength="13"
+                   style="text-transform:uppercase" required>
+          </div>
+          <div>
+            <label>📄 Código Postal <span class="req">*</span></label>
+            <input type="text" name="cp" placeholder="20126" inputmode="numeric" maxlength="5" required>
+          </div>
+        </div>
+
+        <label>📄 Régimen Fiscal <span class="req">*</span></label>
+        <select name="regimen" required>
+          <option value="601">601 · General de Ley Personas Morales</option>
+          <option value="603">603 · Personas Morales con Fines no Lucrativos</option>
+          <option value="605">605 · Sueldos y Salarios e Ingresos Asimilados a Salarios</option>
+          <option value="606">606 · Arrendamiento</option>
+          <option value="612">612 · Personas Físicas con Actividades Empresariales y Profesionales</option>
+          <option value="620">620 · Sociedades Cooperativas de Producción</option>
+          <option value="621">621 · Incorporación Fiscal</option>
+          <option value="622">622 · Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras</option>
+          <option value="626">626 · Régimen Simplificado de Confianza (RESICO)</option>
+          <option value="628">628 · Hidrocarburos</option>
+          <option value="OTRO">Otro</option>
+        </select>
+
+        <label>✉️ Correo de contacto <span class="req">*</span></label>
+        <input type="email" name="email" placeholder="tucorreo@empresa.com" required>
+        <p class="hint">A este correo llegarán tus facturas y será tu <b>usuario de acceso</b>.</p>
+
+        <button type="submit" class="btn">🛡️ Crear mi cuenta de prueba</button>
+      </form>
+      <p class="pie">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+    </div>
+  </div>
+  <script>
+    const err = new URLSearchParams(location.search).get('error');
+    const msgs = {
+      campos: 'Completa todos los campos obligatorios.',
+      correo: 'El correo no tiene un formato válido.',
+      rfc: 'El RFC no tiene un formato válido (12-13 caracteres).',
+      existe: 'Ya existe una cuenta con ese correo. Inicia sesión o usa otro correo.',
+      error: 'No se pudo crear la cuenta. Intenta de nuevo.'
+    };
+    if (err && msgs[err]) { const a = document.getElementById('alerta'); a.textContent = msgs[err]; a.style.display='block'; }
+  </script>
+</body>
+</html>

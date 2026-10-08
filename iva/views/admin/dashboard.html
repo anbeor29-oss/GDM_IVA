@@ -67,15 +67,36 @@ async function cargarUsuarios() {
       <td style="padding:.45rem .5rem">${u.nombre}</td>
       <td>${u.username}</td>
       <td><code>${u.rfc}</code></td>
-      <td><span class="badge ${u.activo ? 'badge-activo' : 'badge-inactivo'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+      <td>${estadoBadge(u)}</td>
       <td>${u.created_at ? u.created_at.substring(0,10) : ''}</td>
-      <td style="text-align:center;display:flex;gap:.4rem;justify-content:center">
+      <td style="text-align:center;display:flex;gap:.4rem;justify-content:center;flex-wrap:wrap">
+        ${u.origen === 'AUTOREGISTRO' ? `<button class="btn-sm" style="background:#16a34a;color:#fff;border:none" onclick="pagarUsuario(${u.id})">Marcar pagado</button>` : ''}
+        ${u.origen === 'AUTOREGISTRO' && u.estado === 'ACTIVO' ? `<button class="btn-sm" style="background:#dc2626;color:#fff;border:none" onclick="bloquearUsuario(${u.id})">Marcar no pagado</button>` : ''}
         <a href="/admin/usuarios/${u.id}/editar"><button class="btn-sm btn-editar">Editar</button></a>
         <button class="btn-sm btn-toggle" onclick="toggleUsuario(${u.id}, this)">${u.activo ? 'Desactivar' : 'Activar'}</button>
         <button class="btn-sm btn-eliminar" onclick="eliminarUsuario(${u.id}, '${u.nombre}')">Eliminar</button>
       </td>
     </tr>
   `).join('');
+}
+
+// Badge del estado comercial (clientes GDM vs prueba/activo/bloqueado).
+function estadoBadge(u) {
+  if (!u.activo) return '<span class="badge badge-inactivo">Inactivo</span>';
+  if (u.origen === 'ADMIN') return '<span class="badge badge-activo">Cliente GDM</span>';
+  if (u.estado === 'PRUEBA') {
+    const rest = Math.max(0, (u.pruebas_max || 2) - (u.pruebas_usadas || 0));
+    return `<span class="badge" style="background:#fef3c7;color:#92400e">Prueba (${rest}/${u.pruebas_max || 2})</span>`;
+  }
+  if (u.estado === 'BLOQUEADO') return '<span class="badge" style="background:#fee2e2;color:#b91c1c">Bloqueado</span>';
+  if (u.estado === 'ACTIVO') {
+    if (u.vigencia_fin) {
+      const dias = Math.ceil((new Date(u.vigencia_fin + 'T23:59:59') - new Date()) / 86400000);
+      return `<span class="badge badge-activo">Activo · ${dias > 0 ? dias + ' días' : 'vencido'}</span>`;
+    }
+    return '<span class="badge badge-activo">Activo</span>';
+  }
+  return '<span class="badge badge-inactivo">—</span>';
 }
 
 async function toggleUsuario(id, btn) {
@@ -90,6 +111,18 @@ async function eliminarUsuario(id, nombre) {
   form.action = `/admin/usuarios/${id}/eliminar`;
   document.body.appendChild(form);
   form.submit();
+}
+
+async function pagarUsuario(id) {
+  if (!confirm('¿Confirmar pago y activar 365 días de acceso para este cliente?')) return;
+  const r = await fetch(`/admin/usuarios/${id}/pagar`, { method: 'POST' });
+  if (r.ok) { cargarUsuarios(); } else { alert('No se pudo marcar como pagado.'); }
+}
+
+async function bloquearUsuario(id) {
+  if (!confirm('¿Marcar como NO pagado y bloquear el acceso de este cliente?')) return;
+  const r = await fetch(`/admin/usuarios/${id}/bloquear`, { method: 'POST' });
+  if (r.ok) { cargarUsuarios(); } else { alert('No se pudo bloquear.'); }
 }
 
 cargarUsuarios();

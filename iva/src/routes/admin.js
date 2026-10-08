@@ -9,7 +9,8 @@ const router = express.Router();
 const {
   getAdmin, updateAdminPassword,
   getAllUsuarios, getUsuarioById,
-  createUsuario, updateUsuario, toggleUsuario, deleteUsuario
+  createUsuario, updateUsuario, toggleUsuario, deleteUsuario,
+  marcarPagado, bloquearComercial
 } = require('../db/database');
 
 // Usar disco persistente en producción (Render: /var/data/efirmas)
@@ -167,6 +168,23 @@ router.post('/usuarios/:id/toggle', requireAdmin, (req, res) => {
   if (!u) return res.status(404).json({ error: 'No encontrado' });
   toggleUsuario(u.id, u.activo ? 0 : 1);
   res.json({ ok: true, activo: u.activo ? 0 : 1 });
+});
+
+// ─── Marcar pagado (activa la anualidad: 365 días) ────────────────────────────
+router.post('/usuarios/:id/pagar', requireAdmin, (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'No encontrado' });
+  const dias = parseInt(req.body && req.body.dias, 10) || 365;
+  const fin = marcarPagado(u.id, dias);
+  res.json({ ok: true, vigencia_fin: fin });
+});
+
+// ─── Marcar NO pagado (bloquea el acceso comercial) ───────────────────────────
+router.post('/usuarios/:id/bloquear', requireAdmin, (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'No encontrado' });
+  bloquearComercial(u.id);
+  res.json({ ok: true });
 });
 
 // ─── Eliminar usuario ─────────────────────────────────────────────────────────

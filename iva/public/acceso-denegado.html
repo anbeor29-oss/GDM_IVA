@@ -94,6 +94,13 @@
       font-size: .9rem;
     }
     .volver:hover { color: #1e40af; }
+    .oferta-box { background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:1.1rem 1.2rem; margin:1.25rem 0 .75rem; text-align:left; color:#065f46; line-height:1.55; }
+    .oferta-box strong { color:#047857; display:block; margin-bottom:.4rem; font-size:1.02rem; }
+    .oferta-box .precio { font-weight:800; color:#047857; }
+    .btn-prueba { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; width:100%; background:linear-gradient(90deg,#2563eb,#14b8a6); color:#fff; padding:.95rem 1.5rem; border-radius:10px; text-decoration:none; font-weight:700; font-size:1.05rem; margin:.25rem 0 1rem; box-sizing:border-box; }
+    .btn-prueba:hover { filter:brightness(1.05); }
+    .sep { border:none; border-top:1px solid #e2e8f0; margin:1.4rem 0 .9rem; }
+    .sep-txt { color:#94a3b8; font-size:.82rem; margin-bottom:.4rem; }
   </style>
 </head>
 <body>
@@ -103,11 +110,15 @@
     <h1>IVA</h1>
     <div class="marca">Grupo GDM High Consulting México</div>
 
-    <div class="mensaje-principal">
-      <strong>Este es un servicio exclusivo para los clientes GDM.</strong>
-      Si aún no eres cliente, pide informes a este WhatsApp.
+    <div class="oferta-box">
+      <strong>¿No eres cliente pero quieres consultar tu IVA?</strong>
+      Consulta tu <b>IVA efectivamente cobrado / pagado</b> las veces que necesites, con <b>descarga a Excel</b>,
+      por <span class="precio">$500 + IVA al año</span>. Pruébalo con <b>2 consultas gratis</b>.
     </div>
+    <a class="btn-prueba" href="/registro">✅ Crear mi cuenta de prueba</a>
 
+    <hr class="sep">
+    <div class="sep-txt">¿Ya eres cliente GDM o tienes dudas?</div>
     <div class="numero">📱 443 367 7027</div>
 
     <a class="btn-whatsapp"

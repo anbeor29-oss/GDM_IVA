@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cuenta creada — IVA Grupo GDM High Consulting México</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1rem; color:#1f2937; }
+    .card { background:#fff; border-radius:16px; width:100%; max-width:520px; padding:2.2rem 2rem; text-align:center; box-shadow:0 25px 50px -12px rgba(0,0,0,.4); }
+    .ic { font-size:3rem; }
+    h1 { font-size:1.4rem; margin:.4rem 0 .2rem; color:#0f172a; }
+    .sub { color:#475569; margin-bottom:1.4rem; }
+    .cred { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; padding:1.1rem 1.2rem; text-align:left; margin:0 0 1rem; }
+    .cred .fila { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.45rem 0; }
+    .cred .k { font-size:.8rem; color:#64748b; }
+    .cred .v { font-family:Consolas,monospace; font-size:1.05rem; font-weight:700; color:#0f172a; word-break:break-all; }
+    .aviso { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:.8rem 1rem; font-size:.86rem; text-align:left; line-height:1.5; margin-bottom:1.3rem; }
+    .btn { display:inline-block; width:100%; background:#2563eb; color:#fff; padding:.9rem; border-radius:10px; text-decoration:none; font-weight:700; }
+    .btn:hover { filter:brightness(1.05); }
+    .copiar { background:none; border:1px solid #cbd5e1; border-radius:7px; padding:.25rem .6rem; font-size:.75rem; cursor:pointer; color:#334155; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="ic">✅</div>
+    <h1>¡Cuenta de prueba creada!</h1>
+    <p class="sub">Estas son tus credenciales temporales. <b>Anótalas ahora</b> (se muestran una sola vez).</p>
+
+    <div class="cred">
+      <div class="fila"><span class="k">Usuario (tu correo)</span><span class="v" id="u">—</span></div>
+      <div class="fila">
+        <span class="k">Contraseña temporal</span>
+        <span style="display:flex;gap:.5rem;align-items:center"><span class="v" id="p">—</span>
+        <button class="copiar" onclick="copiar()">Copiar</button></span>
+      </div>
+    </div>
+
+    <div class="aviso">
+      🔒 Por seguridad, <b>deberás cambiar la contraseña</b> al entrar. Tienes <b>2 consultas de prueba gratis</b>;
+      para seguir usándolo, el costo es <b>$500 + IVA al año</b> con descarga a Excel.
+    </div>
+
+    <a class="btn" href="/login">Ir a iniciar sesión →</a>
+  </div>
+  <script>
+    fetch('/api/registro-exito').then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+      document.getElementById('u').textContent = d.username;
+      document.getElementById('p').textContent = d.tempPassword;
+    }).catch(() => { location.href = '/registro'; });
+    function copiar(){
+      const p = document.getElementById('p').textContent;
+      navigator.clipboard && navigator.clipboard.writeText(p);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurar e.firma — IVA Grupo GDM High Consulting México</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1rem; color:#1f2937; }
+    .card { background:#fff; border-radius:16px; width:100%; max-width:480px; padding:2.2rem 2rem; box-shadow:0 25px 50px -12px rgba(0,0,0,.4); }
+    h1 { font-size:1.3rem; margin:0 0 .3rem; color:#0f172a; text-align:center; }
+    .sub { color:#475569; text-align:center; margin-bottom:1.3rem; font-size:.92rem; }
+    label { display:block; font-size:.82rem; font-weight:600; color:#334155; margin:0 0 .35rem; }
+    input { width:100%; padding:.65rem .8rem; border:1px solid #cbd5e1; border-radius:9px; font-size:.92rem; margin-bottom:1rem; }
+    input[type=file] { padding:.5rem; background:#f8fafc; }
+    input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+    .btn { width:100%; border:none; border-radius:10px; padding:.9rem; color:#fff; font-size:1rem; font-weight:700; cursor:pointer; background:#2563eb; }
+    .btn:hover { filter:brightness(1.05); }
+    .alerta { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; padding:.7rem .9rem; border-radius:9px; font-size:.88rem; margin-bottom:1rem; display:none; }
+    .nota { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:10px; padding:.8rem 1rem; font-size:.82rem; line-height:1.5; margin-bottom:1.2rem; }
+    .salir { display:block; text-align:center; margin-top:1rem; color:#64748b; text-decoration:none; font-size:.85rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔐 Configura tu e.firma</h1>
+    <p class="sub">La consulta de tu IVA se hace con tu e.firma (SAT). Súbela una vez para continuar.</p>
+    <div class="nota">Tus archivos (.cer y .key) y la contraseña se guardan <b>cifrados</b> y solo se usan para consultar tu información ante el SAT.</div>
+    <div id="alerta" class="alerta"></div>
+    <form method="POST" action="/configurar-efirma" enctype="multipart/form-data">
+      <label>Certificado (.cer)</label>
+      <input type="file" name="cer" accept=".cer" required>
+      <label>Llave privada (.key)</label>
+      <input type="file" name="key" accept=".key" required>
+      <label>Contraseña de la e.firma</label>
+      <input type="password" name="efirma_password" required>
+      <button type="submit" class="btn">Guardar y entrar</button>
+    </form>
+    <a class="salir" href="/logout">Salir</a>
+  </div>
+  <script>
+    const err = new URLSearchParams(location.search).get('error');
+    if (err) {
+      const a = document.getElementById('alerta');
+      a.textContent = err === 'campos' ? 'Sube tu .cer, tu .key y la contraseña.' : 'No se pudo guardar la e.firma. Verifica los archivos.';
+      a.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
