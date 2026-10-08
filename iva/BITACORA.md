@@ -10,7 +10,8 @@ Registro cronológico del desarrollo y despliegue del Portal de IVA.
 - **Hosting:** Render.com — plan Starter + disco persistente 1 GB
 - **Costo mensual:** $7.25 USD (~$145 MXN)
 - **Repo:** https://github.com/anbeor29-oss/GDM_IVA
-- **Modo:** Pruebas (MODO_PRODUCCION=false, sin restricción día 10-28)
+- **Motor SAT:** **SatGo** (REST) desde 2026-10-07 — ver `SATGO.md`
+- **Modelo:** comercial (autoregistro + 2 pruebas + anualidad) — ver `COMERCIALIZACION.md`
 
 ---
 
@@ -121,6 +122,29 @@ Esto resolvió el bloqueo que tuvimos varios días.
   - Link "⚡ Portal de IVA →" en el footer
 - ✅ Botones apuntan a `https://iva.hcgm.com.mx/login`
 
+### 📅 2026-10-07 — Comercialización, motor SatGo y fix de fechas
+
+Salto grande respecto a junio (entre medias: PWA instalable, `MODO_PRODUCCION`,
+soporte `DATA_DIR`/`UPLOADS_DIR`). Lo de hoy:
+
+- ✅ **Comercialización v1** (commits `98e5fef` + `f8857d8`): autoregistro público
+  (`/registro`) con **2 consultas de prueba** → `BLOQUEADO` → **$500+IVA anual** / 365
+  días al "Marcar pagado". Clientes GDM (`origen=ADMIN`) sin límite. Usuario = correo +
+  contraseña temporal; e.firma en el primer acceso. Ver **`COMERCIALIZACION.md`**.
+- ✅ **Descarga a Excel = servicio de pago por usuario** (`excel_habilitado`, default 0
+  para TODOS): botón/ruta ocultos sin permiso; checkbox en el admin; se enciende al pagar.
+- ✅ **Motor de descarga cambiado a SatGo** (`src/sat/satgo.js` + `download.js`),
+  sustituye a `@nodecfdi`. Misma e.firma, mismo flujo. Ver **`SATGO.md`**.
+- ✅ Admin: botones de acción con **iconos alineados** + checkbox Excel.
+- ✅ Registro/e.firma/login: textos y nota de confianza de la e.firma.
+- 🐛 **401 "Invalid key"** → la `SATGO_API_KEY` de Render no era la API Key permanente.
+  Fix = operación (poner la key correcta). Mensaje de error mejorado en commit `4d3a1e5`.
+- 🐛 **"Fecha final invalida"** (el SAT) → el motor pedía hasta el último día del mes
+  (futuro). Fix (commit `68b9225`): rango **día 1 → ayer**, en **hora de México**
+  (`download.js` + `parser.js`), con caso especial del día 1.
+
+Commits del día: `98e5fef`, `f8857d8`, `4d3a1e5`, `68b9225`.
+
 ---
 
 ## 🐛 Bugs históricos y soluciones
@@ -198,4 +222,4 @@ Esto resolvió el bloqueo que tuvimos varios días.
 
 ---
 
-*Última actualización: 2026-06-11*
+*Última actualización: 2026-10-07*

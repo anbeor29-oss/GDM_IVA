@@ -8,6 +8,17 @@
 
 ---
 
+> ### ⚠️ Actualización 2026‑10‑07 (lee estos docs primero)
+> Este README describe la versión original. Cambios vigentes:
+> - **Motor SAT = SatGo** (REST), ya **no** `@nodecfdi`. → **[`SATGO.md`](SATGO.md)**
+>   (incluye cómo obtener `SATGO_API_KEY` y el troubleshooting de 401 / "Fecha final invalida").
+> - **Modelo comercial**: autoregistro + 2 pruebas + anualidad $500+IVA; Excel de pago por
+>   usuario. Ya **no** es "solo clientes GDM". → **[`COMERCIALIZACION.md`](COMERCIALIZACION.md)**
+> - Variable nueva imprescindible: **`SATGO_API_KEY`** (API Key permanente de SatGo).
+> - Bitácora del día: **[`BITACORA.md`](BITACORA.md)**.
+
+---
+
 ## 🎯 Descripción
 
 Sistema web que automatiza la consulta del IVA mensual de los clientes:
