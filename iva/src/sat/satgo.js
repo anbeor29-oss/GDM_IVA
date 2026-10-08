@@ -37,14 +37,19 @@ async function getJwt() {
     if (!portal) throw new Error('Falta SATGO_API_KEY (o SATGO_PORTAL_TOKEN) en el entorno del servidor.');
     const r = await axios.post(`${BASE}/api/v1/Users/CreateKey`, {}, {
       headers: { Authorization: `Bearer ${portal}` }, timeout: T, validateStatus: () => true });
-    if (r.status < 200 || r.status >= 300) throw new Error(`SatGo CreateKey respondió ${r.status}`);
+    if (r.status < 200 || r.status >= 300) throw new Error(`SatGo CreateKey respondió ${r.status}: ${textoErr(r)}`);
     key = r.data && (r.data.key || r.data.apiKey || r.data.apikey);
     if (!key) throw new Error('SatGo CreateKey no devolvió una API Key reconocible.');
   }
 
   const r = await axios.post(`${BASE}/api/Auth/token?key=${encodeURIComponent(key)}`, {}, {
     timeout: T, validateStatus: () => true });
-  if (r.status < 200 || r.status >= 300) throw new Error(`SatGo Auth/token respondió ${r.status}`);
+  if (r.status < 200 || r.status >= 300) {
+    const pista = r.status === 401
+      ? ' — la SATGO_API_KEY no es válida: debe ser la API Key PERMANENTE de SatGo (la que da CreateKey), no el token del portal; revisa también que no tenga espacios ni comillas.'
+      : '';
+    throw new Error(`SatGo Auth/token respondió ${r.status}${pista} ${textoErr(r)}`.trim());
+  }
   const jwt = (typeof r.data === 'string')
     ? r.data
     : (r.data && (r.data.token || r.data.access_token || r.data.accessToken
