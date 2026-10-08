@@ -10,7 +10,7 @@ const {
   getAdmin, updateAdminPassword,
   getAllUsuarios, getUsuarioById,
   createUsuario, updateUsuario, toggleUsuario, deleteUsuario,
-  marcarPagado, bloquearComercial
+  marcarPagado, bloquearComercial, setExcelHabilitado
 } = require('../db/database');
 
 // Usar disco persistente en producción (Render: /var/data/efirmas)
@@ -185,6 +185,17 @@ router.post('/usuarios/:id/bloquear', requireAdmin, (req, res) => {
   if (!u) return res.status(404).json({ error: 'No encontrado' });
   bloquearComercial(u.id);
   res.json({ ok: true });
+});
+
+// ─── Habilitar / deshabilitar descarga a Excel (checkbox del admin) ───────────
+// Excel es un servicio de pago; el admin lo prende para quien lo contrate.
+router.post('/usuarios/:id/excel', requireAdmin, (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'No encontrado' });
+  const raw = (req.query.excel != null ? req.query.excel : (req.body && req.body.excel));
+  const on = raw === true || raw === 'true' || raw === 1 || raw === '1';
+  setExcelHabilitado(u.id, on);
+  res.json({ ok: true, excel_habilitado: on ? 1 : 0 });
 });
 
 // ─── Eliminar usuario ─────────────────────────────────────────────────────────

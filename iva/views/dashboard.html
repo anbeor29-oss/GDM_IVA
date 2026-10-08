@@ -41,7 +41,7 @@
   <span class="usuario" id="infoUsuario">Cargando...</span>
   <div style="display:flex;gap:1rem;align-items:center">
     <button class="btn-cargar" id="btnCargar">&#8635; Descargar del SAT</button>
-    <a href="/dashboard/exportar" class="btn-cargar" style="background:#16a34a;text-decoration:none"
+    <a href="/dashboard/exportar" id="btnExcel" class="btn-cargar" style="background:#16a34a;text-decoration:none;display:none"
        title="Descargar el detalle y el resumen de IVA en Excel (.xlsx)">&#8595; Excel</a>
     <a href="/logout">Salir</a>
   </div>
@@ -143,6 +143,9 @@ function mostrarMensaje(texto, tipo) {
 // Aviso de prueba / vigencia (comercialización): consultas o días restantes.
 fetch('/dashboard/api/estado-cuenta').then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
   if (!d) return;
+  // El botón de Excel solo se muestra si la cuenta tiene la descarga habilitada (de pago).
+  var bE = document.getElementById('btnExcel');
+  if (bE) bE.style.display = d.excel ? '' : 'none';
   if (d.estado === 'PRUEBA' && d.pruebasRestantes != null) {
     mostrarMensaje('Cuenta de prueba: te quedan ' + d.pruebasRestantes + ' consulta(s) gratis. Después, suscripción $500 + IVA al año (con Excel).', 'info');
   } else if (d.diasRestantes != null && d.diasRestantes <= 30) {

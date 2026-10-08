@@ -48,6 +48,7 @@ router.get('/api/estado-cuenta', requireAuth, (req, res) => {
     puede: acc.puede, motivo: acc.motivo,
     pruebasRestantes: acc.pruebasRestantes != null ? acc.pruebasRestantes : null,
     diasRestantes: acc.diasRestantes != null ? acc.diasRestantes : null,
+    excel: !!(u && u.excel_habilitado),
   });
 });
 
@@ -128,6 +129,11 @@ router.get('/exportar', requireAuth, (req, res) => {
   const u = getUsuarioById(req.session.userId);
   const acc = estadoAcceso(u);
   if (!acc.puede) return res.status(403).send('Tu acceso está bloqueado.');
+  // La descarga a Excel es un extra de pago: clientes GDM y prospectos solo la tienen
+  // si el admin se las habilitó (o si pagaron la anualidad, que ya la incluye).
+  if (!u || !u.excel_habilitado) {
+    return res.status(403).send('La descarga a Excel no está habilitada en tu cuenta. Es un servicio adicional; contáctanos para activarla.');
+  }
   try {
     const rfc = req.session.rfc;
     const tp = process.env.TEMP_XML_PATH || 'C:/temp2xml';

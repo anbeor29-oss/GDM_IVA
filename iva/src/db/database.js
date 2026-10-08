@@ -52,6 +52,11 @@ db.exec(`
   addCol('pruebas_max', 'pruebas_max INTEGER NOT NULL DEFAULT 2');
   addCol('vigencia_fin', 'vigencia_fin TEXT');                        // fecha (YYYY-MM-DD) fin de la anualidad pagada
   addCol('must_change_password', 'must_change_password INTEGER NOT NULL DEFAULT 0');
+  // Derecho a descargar a Excel. Por defecto 0 (apagado) para TODOS, incluidos los
+  // clientes GDM (origen ADMIN): la descarga a Excel es un extra que se paga. Se
+  // enciende con el checkbox del admin, o automáticamente al "Marcar pagado" (la
+  // anualidad de autoregistro ya incluye Excel).
+  addCol('excel_habilitado', 'excel_habilitado INTEGER NOT NULL DEFAULT 0');
 }
 
 // Crear admin por defecto si no existe
@@ -105,7 +110,7 @@ function updateAdminPassword(newPassword, primerLogin = 0) {
 // ─── Queries Usuarios ────────────────────────────────────────────────────────
 function getAllUsuarios() {
   return db.prepare(`SELECT id, nombre, username, rfc, activo, estado, origen,
-                            pruebas_usadas, pruebas_max, vigencia_fin, created_at
+                            pruebas_usadas, pruebas_max, vigencia_fin, excel_habilitado, created_at
                      FROM usuarios ORDER BY origen DESC, nombre`).all();
 }
 
@@ -202,18 +207,24 @@ function registrarConsultaPrueba(id) {
   return { restantes: Math.max(0, (u.pruebas_max || 2) - usadas), bloqueado };
 }
 
-/** Marca pagado: ACTIVO con vigencia de `dias` (365 por defecto). Devuelve la fecha fin. */
+/** Marca pagado: ACTIVO con vigencia de `dias` (365 por defecto) y Excel habilitado
+ *  (la anualidad de autoregistro ya incluye la descarga a Excel). Devuelve la fecha fin. */
 function marcarPagado(id, dias = 365) {
   const fin = new Date();
   fin.setDate(fin.getDate() + dias);
   const finStr = fin.toISOString().slice(0, 10);
-  db.prepare("UPDATE usuarios SET estado = 'ACTIVO', vigencia_fin = ? WHERE id = ?").run(finStr, id);
+  db.prepare("UPDATE usuarios SET estado = 'ACTIVO', vigencia_fin = ?, excel_habilitado = 1 WHERE id = ?").run(finStr, id);
   return finStr;
 }
 
-/** Marca "no pagado": BLOQUEADO (no puede consultar) y borra la vigencia. */
+/** Marca "no pagado": BLOQUEADO (no puede consultar), borra vigencia y quita Excel. */
 function bloquearComercial(id) {
-  db.prepare("UPDATE usuarios SET estado = 'BLOQUEADO', vigencia_fin = NULL WHERE id = ?").run(id);
+  db.prepare("UPDATE usuarios SET estado = 'BLOQUEADO', vigencia_fin = NULL, excel_habilitado = 0 WHERE id = ?").run(id);
+}
+
+/** Habilita/deshabilita la descarga a Excel de un usuario (checkbox del admin). */
+function setExcelHabilitado(id, on) {
+  db.prepare('UPDATE usuarios SET excel_habilitado = ? WHERE id = ?').run(on ? 1 : 0, id);
 }
 
 /** ¿Puede usar el servicio? Resuelve prueba / vigencia / bloqueo. */
@@ -245,5 +256,6 @@ module.exports = {
   createUsuario, updateUsuario, toggleUsuario, deleteUsuario,
   encryptPassword, decryptPassword,
   crearAutoRegistro, setPasswordUsuario, setEfirmaUsuario,
-  registrarConsultaPrueba, marcarPagado, bloquearComercial, estadoAcceso
+  registrarConsultaPrueba, marcarPagado, bloquearComercial, estadoAcceso,
+  setExcelHabilitado
 };

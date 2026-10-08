@@ -5,6 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — IVA Grupo GDM High Consulting México</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* Botones de acción alineados y con icono */
+    .acciones { display:flex; gap:.35rem; justify-content:flex-end; flex-wrap:wrap; align-items:center; }
+    .acciones a { text-decoration:none; }
+    .bx { display:inline-flex; align-items:center; gap:.3rem; border:none; border-radius:7px;
+          padding:.42rem .62rem; font-size:.8rem; font-weight:600; color:#fff; cursor:pointer;
+          white-space:nowrap; line-height:1; }
+    .bx:hover { filter:brightness(1.08); }
+    .bx-editar   { background:#2563eb; }
+    .bx-toggle   { background:#f59e0b; }
+    .bx-eliminar { background:#dc2626; }
+    .bx-pagar    { background:#16a34a; }
+    .bx-nopagar  { background:#b91c1c; }
+    /* Interruptor de Excel */
+    .switch-excel { display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem;
+                    font-weight:600; color:#334155; cursor:pointer; user-select:none; }
+    .switch-excel input { width:16px; height:16px; cursor:pointer; accent-color:#16a34a; }
+    @media(max-width:760px){ .acciones { justify-content:center; } }
+  </style>
 </head>
 <body>
 
@@ -32,12 +51,13 @@
           <th>Usuario</th>
           <th>RFC</th>
           <th>Estado</th>
+          <th style="text-align:center">Excel</th>
           <th>Alta</th>
           <th style="text-align:center">Acciones</th>
         </tr>
       </thead>
       <tbody id="bodyUsuarios">
-        <tr><td colspan="6" style="padding:2rem;text-align:center;color:#94a3b8">Cargando...</td></tr>
+        <tr><td colspan="7" style="padding:2rem;text-align:center;color:#94a3b8">Cargando...</td></tr>
       </tbody>
     </table>
   </div>
@@ -58,7 +78,7 @@ async function cargarUsuarios() {
   const tbody = document.getElementById('bodyUsuarios');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem;text-align:center;color:#94a3b8">No hay clientes registrados.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:2rem;text-align:center;color:#94a3b8">No hay clientes registrados.</td></tr>';
     return;
   }
 
@@ -68,13 +88,21 @@ async function cargarUsuarios() {
       <td>${u.username}</td>
       <td><code>${u.rfc}</code></td>
       <td>${estadoBadge(u)}</td>
+      <td style="text-align:center">
+        <label class="switch-excel" title="Habilitar la descarga a Excel (servicio de pago)">
+          <input type="checkbox" ${u.excel_habilitado ? 'checked' : ''} onchange="toggleExcel(${u.id}, this)">
+          Excel
+        </label>
+      </td>
       <td>${u.created_at ? u.created_at.substring(0,10) : ''}</td>
-      <td style="text-align:center;display:flex;gap:.4rem;justify-content:center;flex-wrap:wrap">
-        ${u.origen === 'AUTOREGISTRO' ? `<button class="btn-sm" style="background:#16a34a;color:#fff;border:none" onclick="pagarUsuario(${u.id})">Marcar pagado</button>` : ''}
-        ${u.origen === 'AUTOREGISTRO' && u.estado === 'ACTIVO' ? `<button class="btn-sm" style="background:#dc2626;color:#fff;border:none" onclick="bloquearUsuario(${u.id})">Marcar no pagado</button>` : ''}
-        <a href="/admin/usuarios/${u.id}/editar"><button class="btn-sm btn-editar">Editar</button></a>
-        <button class="btn-sm btn-toggle" onclick="toggleUsuario(${u.id}, this)">${u.activo ? 'Desactivar' : 'Activar'}</button>
-        <button class="btn-sm btn-eliminar" onclick="eliminarUsuario(${u.id}, '${u.nombre}')">Eliminar</button>
+      <td>
+        <div class="acciones">
+          ${u.origen === 'AUTOREGISTRO' ? `<button class="bx bx-pagar" title="Marcar pagado: activa 365 días y habilita Excel" onclick="pagarUsuario(${u.id})">💳 Pagado</button>` : ''}
+          ${u.origen === 'AUTOREGISTRO' && u.estado === 'ACTIVO' ? `<button class="bx bx-nopagar" title="Marcar no pagado: bloquea el acceso" onclick="bloquearUsuario(${u.id})">🚫 No pagado</button>` : ''}
+          <a href="/admin/usuarios/${u.id}/editar"><button class="bx bx-editar" title="Editar cliente">✏️ Editar</button></a>
+          <button class="bx bx-toggle" title="${u.activo ? 'Desactivar' : 'Activar'} cliente" onclick="toggleUsuario(${u.id}, this)">${u.activo ? '⏸️ Desactivar' : '▶️ Activar'}</button>
+          <button class="bx bx-eliminar" title="Eliminar cliente" onclick="eliminarUsuario(${u.id}, '${u.nombre}')">🗑️ Eliminar</button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -123,6 +151,13 @@ async function bloquearUsuario(id) {
   if (!confirm('¿Marcar como NO pagado y bloquear el acceso de este cliente?')) return;
   const r = await fetch(`/admin/usuarios/${id}/bloquear`, { method: 'POST' });
   if (r.ok) { cargarUsuarios(); } else { alert('No se pudo bloquear.'); }
+}
+
+// Habilita/deshabilita la descarga a Excel (servicio de pago) con el checkbox.
+async function toggleExcel(id, el) {
+  const on = el.checked;
+  const r = await fetch(`/admin/usuarios/${id}/excel?excel=${on}`, { method: 'POST' });
+  if (!r.ok) { el.checked = !on; alert('No se pudo cambiar el permiso de Excel.'); }
 }
 
 cargarUsuarios();
