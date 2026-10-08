@@ -15,19 +15,34 @@ const AdmZip = require('adm-zip');
 const satgo  = require('./satgo');
 const { log } = require('../security/attackHandler');
 
-// ── Periodo del mes EN CURSO: día 1 00:00:00 → último día 23:59:59 ──────────────
+// ── Periodo de descarga ─────────────────────────────────────────────────────────
+// La CARPETA es siempre el mes EN CURSO (coincide con calcularIVA). El RANGO que se
+// pide al SAT va del día 1 → AYER 23:59:59: el SAT rechaza con "Fecha final invalida"
+// si la fecha final es hoy o futura (por eso NO se usa el último día del mes).
+// Caso especial día 1: el mes en curso aún no tiene datos → baja TODO el mes anterior
+// (pero se guarda/lee como mes en curso para que el dashboard no salga vacío).
 function periodoMesActual() {
-  const now = new Date();
-  const y   = now.getFullYear();
-  const m   = now.getMonth();                       // 0-11
-  const mm  = String(m + 1).padStart(2, '0');
-  const ultimo = new Date(y, m + 1, 0).getDate();   // último día del mes
-  return {
-    anio: y,
-    mesNum: mm,
-    fi: `${y}-${mm}-01 00:00:00`,
-    ff: `${y}-${mm}-${String(ultimo).padStart(2, '0')} 23:59:59`,
-  };
+  // Reloj de México (el SAT opera en hora del centro): así "ayer" es un día YA cerrado
+  // en México y la fecha final nunca cae en el futuro (evita "Fecha final invalida"
+  // al anochecer, cuando el servidor UTC ya pasó a la fecha siguiente).
+  const now  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+  const y    = now.getFullYear();
+  const m    = now.getMonth();                      // 0-11
+  const mm   = String(m + 1).padStart(2, '0');
+  const ayer = new Date(y, m, now.getDate() - 1);
+  const ayerY = ayer.getFullYear();
+  const ayerM = String(ayer.getMonth() + 1).padStart(2, '0');
+  const ayerD = String(ayer.getDate()).padStart(2, '0');
+
+  let fi, ff;
+  if (now.getDate() === 1) {
+    fi = `${ayerY}-${ayerM}-01 00:00:00`;
+    ff = `${ayerY}-${ayerM}-${ayerD} 23:59:59`;
+  } else {
+    fi = `${y}-${mm}-01 00:00:00`;
+    ff = `${ayerY}-${ayerM}-${ayerD} 23:59:59`;
+  }
+  return { anio: y, mesNum: mm, fi, ff };
 }
 
 // ── Solicitar + verificar + descargar un tipo (emitidos/recibidos) por SatGo ────

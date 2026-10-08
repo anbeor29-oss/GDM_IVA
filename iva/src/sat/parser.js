@@ -180,7 +180,9 @@ function parseCarpeta(dir, tipo) {
 }
 
 function calcularIVA(tempXmlPath, rfc) {
-  const now  = new Date();
+  // Mismo reloj de México que download.js, para leer la carpeta del mes correcto
+  // (evita desfases de mes en la noche por la diferencia con UTC del servidor).
+  const now  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
   // Usar SIEMPRE el mes en curso (evita mostrar mes anterior el dÃ­a 1)
   // El dÃ­a 1: mes en curso estÃ¡ vacÃ­o â†’ muestra tablas vacÃ­as (correcto)
   // Del dÃ­a 2 en adelante: muestra CFDIs del mes en curso
