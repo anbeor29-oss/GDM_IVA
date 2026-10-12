@@ -17,31 +17,17 @@ const satgo  = require('./satgo');
 const { log } = require('../security/attackHandler');
 
 // ── Periodo de descarga ─────────────────────────────────────────────────────────
-// La CARPETA es siempre el mes EN CURSO (coincide con calcularIVA). El RANGO que se
-// pide al SAT va del día 1 → AYER 23:59:59, en hora de México (el SAT opera en hora
-// del centro y rechaza fechas finales en el futuro / del día en curso).
-// Caso especial día 1: el mes en curso aún no tiene datos → baja TODO el mes anterior
-// (pero se guarda/lee como mes en curso para que el dashboard no salga vacío).
+// MES EN CURSO completo: del día 1 00:00:00 → AHORA (hora de México). "Hasta ahora"
+// incluye el día en curso y nunca es fecha futura. En facfiel (consulta síncrona) el
+// SAT devuelve lo que exista del periodo. La carpeta es el mes en curso (coincide con
+// calcularIVA); la limpieza del mes anterior la hace el scheduler el día 1.
 function periodoMesActual() {
-  // Reloj de México: así "ayer" es un día YA cerrado en México y la fecha final nunca
-  // cae en el futuro (al anochecer, el servidor UTC ya pasó a la fecha siguiente).
-  const now  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
-  const y    = now.getFullYear();
-  const m    = now.getMonth();                      // 0-11
-  const mm   = String(m + 1).padStart(2, '0');
-  const ayer = new Date(y, m, now.getDate() - 1);
-  const ayerY = ayer.getFullYear();
-  const ayerM = String(ayer.getMonth() + 1).padStart(2, '0');
-  const ayerD = String(ayer.getDate()).padStart(2, '0');
-
-  let fi, ff;
-  if (now.getDate() === 1) {
-    fi = `${ayerY}-${ayerM}-01 00:00:00`;
-    ff = `${ayerY}-${ayerM}-${ayerD} 23:59:59`;
-  } else {
-    fi = `${y}-${mm}-01 00:00:00`;
-    ff = `${ayerY}-${ayerM}-${ayerD} 23:59:59`;
-  }
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+  const y   = now.getFullYear();
+  const mm  = String(now.getMonth() + 1).padStart(2, '0');
+  const p   = n => String(n).padStart(2, '0');
+  const fi  = `${y}-${mm}-01 00:00:00`;
+  const ff  = `${y}-${mm}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
   return { anio: y, mesNum: mm, fi, ff };
 }
 
@@ -154,4 +140,4 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
   }
 }
 
-module.exports = { ejecutarDescargaJob };
+module.exports = { ejecutarDescargaJob, periodoMesActual };

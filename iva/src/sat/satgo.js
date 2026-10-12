@@ -153,4 +153,37 @@ async function consultaFac(rfc, efirma, { tipo, fechaIni, fechaFin }) {
   return { comprobantes, requestId, count };
 }
 
-module.exports = { getJwt, solicita, verifica, descarga, consultaFac };
+/** Igual que consultaFac pero NO lanza: devuelve un resumen de la respuesta CRUDA de
+ *  SatGo para diagnóstico (status, success, count, requestId, nComprobantes, llaves).
+ *  Sirve para ver por qué una consulta devuelve 0 sin tener acceso a los logs. */
+async function consultaFacDebug(rfc, efirma, { tipo, fechaIni, fechaFin }) {
+  let jwt;
+  try { jwt = await getJwt(); } catch (e) { return { paso: 'jwt', error: e.message }; }
+  let r;
+  try {
+    r = await axios.post(`${BASE}/api/v2/Consultar/facfiel`, efirmaForm(efirma), {
+      params: { 'api-version': '2', tipo, tipoBusqueda: 1, fecha_inicial: fechaIni, fecha_final: fechaFin, descargaComprobantes: true, descargaPdfs: false },
+      headers: { Authorization: `Bearer ${jwt}`, RFC: rfc },
+      timeout: 180000, validateStatus: () => true, maxBodyLength: Infinity, maxContentLength: Infinity,
+    });
+  } catch (e) { return { paso: 'http', error: e.message }; }
+  const esObj = r.data && typeof r.data === 'object';
+  const d = esObj ? r.data : {};
+  const comps = d.comprobantes || d.Comprobantes || [];
+  const primero = comps[0] || null;
+  return {
+    status: r.status,
+    dataTipo: typeof r.data,
+    dataKeys: esObj ? Object.keys(d).slice(0, 30) : null,
+    success: d.success != null ? d.success : d.Success,
+    errorMessage: d.errorMessage || d.ErrorMessage || null,
+    count: d.count != null ? d.count : (d.Count != null ? d.Count : null),
+    requestId: d.requestId || d.RequestId || null,
+    nComprobantes: comps.length,
+    primerComprobanteKeys: primero ? Object.keys(primero).slice(0, 40) : null,
+    primerTieneContent: primero ? !!(primero.content || primero.Content) : null,
+    cuerpoBreve: (typeof r.data === 'string') ? r.data.slice(0, 600) : undefined,
+  };
+}
+
+module.exports = { getJwt, solicita, verifica, descarga, consultaFac, consultaFacDebug };

@@ -3,7 +3,8 @@ const express = require('express');
 const path    = require('path');
 const router  = express.Router();
 
-const { ejecutarDescargaJob } = require('../sat/download');
+const { ejecutarDescargaJob, periodoMesActual } = require('../sat/download');
+const satgo                   = require('../sat/satgo');
 const { calcularIVA }         = require('../sat/parser');
 const { crearJob, obtenerJob }= require('../jobs/manager');
 const { satLimiter }          = require('../security/rateLimiter');
@@ -206,6 +207,22 @@ router.get('/api/sesion', requireAuth, (req, res) => {
     rfc:    req.session.rfc,
     dia:    new Date().getDate()
   });
+});
+
+// ── Diagnóstico facfiel: ver QUÉ devuelve SatGo (sin escribir nada a disco) ─────
+// Uso: /dashboard/api/debug-facfiel?tipo=emitidos|recibidos . Devuelve success,
+// count, requestId, nComprobantes y las llaves del primer comprobante.
+router.get('/api/debug-facfiel', requireAuth, async (req, res) => {
+  try {
+    const { rfc, cerPath, keyPath, efirmaPassword } = req.session;
+    if (!cerPath || !keyPath || !efirmaPassword) return res.status(400).json({ error: 'Sin e.firma en sesión. Entra al dashboard primero.' });
+    const tipo = req.query.tipo === 'recibidos' ? 'recibidos' : 'emitidos';
+    const { fi, ff } = periodoMesActual();
+    const out = await satgo.consultaFacDebug(rfc, { cerPath, keyPath, password: efirmaPassword }, { tipo, fechaIni: fi, fechaFin: ff });
+    res.json({ rfc, tipo, periodo: { fi, ff }, ...out });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Diagnóstico ───────────────────────────────────────────────────────────────
