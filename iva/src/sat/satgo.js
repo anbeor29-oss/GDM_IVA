@@ -120,4 +120,37 @@ async function descarga(rfc, efirma, idPaquete) {
   return d.paqueteBase64 || d.PaqueteBase64 || '';
 }
 
-module.exports = { getJwt, solicita, verifica, descarga };
+/** Consulta SÍNCRONA de CFDI por e.firma (FIEL): UNA sola llamada que devuelve los
+ *  comprobantes con su XML en base64 (campo `content`), sin el flujo asíncrono
+ *  solicita/verifica/descarga. tipo: 'emitidos' | 'recibidos'.
+ *  Devuelve { comprobantes, requestId, count }. Si el SAT topa el volumen suele
+ *  devolver sólo `requestId` (modo metadata) en vez de los comprobantes. */
+async function consultaFac(rfc, efirma, { tipo, fechaIni, fechaFin }) {
+  const jwt = await getJwt();
+  const r = await axios.post(`${BASE}/api/v2/Consultar/facfiel`, efirmaForm(efirma), {
+    params: {
+      'api-version': '2',
+      tipo,                        // emitidos | recibidos
+      tipoBusqueda: 1,             // 1 = por rango de fechas
+      fecha_inicial: fechaIni,     // yyyy-MM-dd HH:mm:ss
+      fecha_final: fechaFin,
+      descargaComprobantes: true,  // incluye el XML (content) en la respuesta
+      descargaPdfs: false,
+    },
+    headers: { Authorization: `Bearer ${jwt}`, RFC: rfc },
+    timeout: 180000,               // síncrono, pero la respuesta puede ser grande
+    validateStatus: () => true,
+    maxBodyLength: Infinity, maxContentLength: Infinity,
+  });
+  if (r.status < 200 || r.status >= 300) throw new Error(`facfiel ${tipo} → ${r.status}: ${textoErr(r)}`);
+  const d = r.data || {};
+  if (d.success === false || d.Success === false) {
+    throw new Error(`facfiel ${tipo}: ${d.errorMessage || d.ErrorMessage || 'rechazada por el SAT'}`);
+  }
+  const comprobantes = d.comprobantes || d.Comprobantes || [];
+  const requestId = d.requestId || d.RequestId || null;
+  const count = (d.count != null ? d.count : (d.Count != null ? d.Count : comprobantes.length));
+  return { comprobantes, requestId, count };
+}
+
+module.exports = { getJwt, solicita, verifica, descarga, consultaFac };

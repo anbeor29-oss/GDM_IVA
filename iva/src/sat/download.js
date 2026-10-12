@@ -1,30 +1,30 @@
 'use strict';
 /**
- * Motor de descarga de CFDI — ahora por SatGo (antes @nodecfdi/sat-ws-descarga-masiva).
+ * Motor de descarga de CFDI por SatGo — consulta SÍNCRONA (Consultar/facfiel).
  *
- * Mismo flujo oficial del SAT (solicita → verifica → descarga) pero por REST vía
- * SatGo, usando la MISMA e.firma del usuario (ver src/sat/satgo.js). Cambios de
- * negocio pedidos:
- *   · Periodo = del día 1 al ÚLTIMO día del mes EN CURSO (antes: día 1 → ayer).
- *   · Sólo comprobantes VIGENTES → los folios cancelados quedan verificados/excluidos.
- *   · La limpieza de XML del mes pasa a correr el DÍA 1 (ver src/scheduler/tasks.js).
+ * UNA sola llamada por tipo con la e.firma del usuario (FIEL): el SAT devuelve los
+ * comprobantes con su XML en base64 (campo `content`), en segundos, en vez del flujo
+ * asíncrono solicita → verifica → descarga (que para "recibidos" tardaba decenas de
+ * minutos). Mismo periodo (día 1 → ayer, hora de México), mismo parser y cálculo.
+ *
+ * Nota: para clientes con MUCHO volumen una consulta síncrona podría venir topada;
+ * en ese caso el SAT suele devolver sólo un `requestId` (modo metadata) y convendría
+ * caer al flujo asíncrono — ver satgo.solicita/verifica/descarga (siguen disponibles).
  */
 const fs     = require('fs');
 const path   = require('path');
-const AdmZip = require('adm-zip');
 const satgo  = require('./satgo');
 const { log } = require('../security/attackHandler');
 
 // ── Periodo de descarga ─────────────────────────────────────────────────────────
 // La CARPETA es siempre el mes EN CURSO (coincide con calcularIVA). El RANGO que se
-// pide al SAT va del día 1 → AYER 23:59:59: el SAT rechaza con "Fecha final invalida"
-// si la fecha final es hoy o futura (por eso NO se usa el último día del mes).
+// pide al SAT va del día 1 → AYER 23:59:59, en hora de México (el SAT opera en hora
+// del centro y rechaza fechas finales en el futuro / del día en curso).
 // Caso especial día 1: el mes en curso aún no tiene datos → baja TODO el mes anterior
 // (pero se guarda/lee como mes en curso para que el dashboard no salga vacío).
 function periodoMesActual() {
-  // Reloj de México (el SAT opera en hora del centro): así "ayer" es un día YA cerrado
-  // en México y la fecha final nunca cae en el futuro (evita "Fecha final invalida"
-  // al anochecer, cuando el servidor UTC ya pasó a la fecha siguiente).
+  // Reloj de México: así "ayer" es un día YA cerrado en México y la fecha final nunca
+  // cae en el futuro (al anochecer, el servidor UTC ya pasó a la fecha siguiente).
   const now  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
   const y    = now.getFullYear();
   const m    = now.getMonth();                      // 0-11
@@ -45,72 +45,52 @@ function periodoMesActual() {
   return { anio: y, mesNum: mm, fi, ff };
 }
 
-// ── Solicitar + verificar + descargar un tipo (emitidos/recibidos) por SatGo ────
-// Retorna la cantidad de XMLs extraídos al disco.
-async function descargarTipo(efirma, rfc, tipo, fi, ff, destDir, onProgreso) {
-  const etiqueta = tipo === 'emitidos' ? 'emitidos' : 'recibidos';
-
-  // PASO 1: Solicitar
-  if (onProgreso) onProgreso(`Solicitando ${etiqueta} al SAT...`);
-  log(`[SatGo] Solicitando ${tipo} RFC=${rfc} ${fi} → ${ff}`);
-  const idSolicitud = await satgo.solicita(rfc, efirma, {
-    tipo, fechaIni: fi, fechaFin: ff, estadoComprobante: 'Vigente',
-  });
-  log(`[SatGo] ${tipo}: IdSolicitud=${idSolicitud}`);
-
-  // PASO 2: Verificar (polling) — hasta ~20 min (80 × 15s)
-  let intentos = 0;
-  const maxIntentos = 80;
-  while (intentos < maxIntentos) {
-    intentos++;
-    if (onProgreso) onProgreso(`${etiqueta}: verificando (intento ${intentos})...`);
-    const v = await satgo.verifica(rfc, efirma, idSolicitud);
-    log(`[SatGo] verifica ${tipo}: estado=${v.estado} cod=${v.cod} paquetes=${v.paquetes.length}`);
-
-    // Terminada
-    if (v.estado === 3) {
-      if (!v.paquetes.length) {
-        log(`[SatGo] ${tipo}: 0 paquetes`);
-        return 0;
+// ── Guarda a disco los XML (base64) que devolvió facfiel ────────────────────────
+// Cada consulta es un SNAPSHOT completo del periodo, así que limpiamos la carpeta
+// antes de escribir (para no dejar XML viejos, p. ej. de comprobantes cancelados).
+// Devuelve cuántos XML escribió.
+function guardarComprobantes(comprobantes, destDir) {
+  try {
+    if (fs.existsSync(destDir)) {
+      for (const f of fs.readdirSync(destDir)) {
+        if (f.toLowerCase().endsWith('.xml')) { try { fs.unlinkSync(path.join(destDir, f)); } catch (_) {} }
       }
-      // PASO 3: Descargar cada paquete y extraer XMLs
-      if (onProgreso) onProgreso(`Descargando ${v.paquetes.length} paquete(s) de ${etiqueta}...`);
-      fs.mkdirSync(destDir, { recursive: true });
-      let totalXmls = 0;
-
-      for (const idPaq of v.paquetes) {
-        log(`[SatGo] Descargando paquete ${idPaq}...`);
-        const b64 = await satgo.descarga(rfc, efirma, idPaq);
-        if (!b64) { log(`[SatGo] paquete ${idPaq} vacío`); continue; }
-
-        const zip = new AdmZip(Buffer.from(b64, 'base64'));
-        for (const entry of zip.getEntries()) {
-          if (entry.entryName.toLowerCase().endsWith('.xml')) {
-            fs.writeFileSync(path.join(destDir, entry.entryName), entry.getData());
-            totalXmls++;
-          }
-        }
-        log(`[SatGo] Paquete ${idPaq}: ${totalXmls} XMLs acumulados en ${destDir}`);
-      }
-      return totalXmls;
     }
+  } catch (_) {}
+  fs.mkdirSync(destDir, { recursive: true });
+  if (!comprobantes || !comprobantes.length) return 0;
 
-    // Rechazada / error / vencida
-    if (v.estado >= 4) {
-      throw new Error(
-        `SAT rechazó ${etiqueta}: estado=${v.estado} cod=${v.cod}. ` +
-        `${v.estado === 5 ? 'Posible límite diario excedido.' : ''} ${v.mensaje}`.trim()
-      );
-    }
-
-    // En proceso (1 o 2) — esperar 15 s
-    await new Promise(r => setTimeout(r, 15000));
+  let n = 0;
+  for (const c of comprobantes) {
+    // Excluir cancelados por si el SAT no los filtró.
+    const estado = String(c.estadoDeComprobante || c.EstadoDeComprobante || '').toLowerCase();
+    if (estado.includes('cancel')) continue;
+    const b64 = c.content || c.Content;
+    if (!b64) continue;
+    const uuid = c.uuid || c.Uuid || c.UUID || `cfdi_${Date.now()}_${n}`;
+    try {
+      fs.writeFileSync(path.join(destDir, `${uuid}.xml`), Buffer.from(b64, 'base64'));
+      n++;
+    } catch (_) {}
   }
-
-  throw new Error(`Timeout: el SAT tardó más de lo esperado en procesar ${etiqueta}.`);
+  return n;
 }
 
-// ── Punto de entrada: ejecutar descarga en background para un job ───────────────
+// ── Consulta síncrona de un tipo (emitidos/recibidos) y guarda los XML ──────────
+async function descargarTipo(efirma, rfc, tipo, fi, ff, destDir, onProgreso) {
+  if (onProgreso) onProgreso(`Consultando ${tipo} al SAT...`);
+  log(`[SatGo] facfiel ${tipo} RFC=${rfc} ${fi} → ${ff}`);
+  const r = await satgo.consultaFac(rfc, efirma, { tipo, fechaIni: fi, fechaFin: ff });
+  if ((!r.comprobantes || !r.comprobantes.length) && r.requestId) {
+    // El SAT devolvió un requestId en vez de los comprobantes (posible alto volumen).
+    log(`[SatGo] ${tipo}: el SAT devolvió requestId=${r.requestId} sin comprobantes síncronos`);
+  }
+  const n = guardarComprobantes(r.comprobantes, destDir);
+  log(`[SatGo] ${tipo}: ${n} XMLs guardados en ${destDir} (count SAT=${r.count})`);
+  return n;
+}
+
+// ── Punto de entrada: ejecutar la consulta en background para un job ────────────
 async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tempXmlPath }) {
   const { actualizarJob } = require('../jobs/manager');
   const { calcularIVA }   = require('./parser');
@@ -119,54 +99,42 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
   try {
     const efirma = { cerPath, keyPath, password };
 
-    // Validar la e.firma (contraseña) localmente antes de ir al SAT: da un error
-    // claro si la clave está mal, en vez de un rechazo opaco del servicio.
+    // Validar la e.firma (contraseña) localmente antes de ir al SAT.
     try { loadEFirma(cerPath, keyPath, password); }
     catch (e) { throw new Error(`e.firma inválida: ${e.message}`); }
 
-    // Periodo = mes en curso, día 1 → último del mes.
     const { anio, mesNum, fi, ff } = periodoMesActual();
     const base = path.join(tempXmlPath.replace(/\\/g, '/'), rfc, `${anio}${mesNum}`);
 
-    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} → ${ff}`);
-    actualizarJob(jobId, { estado: 'iniciando', progreso: `Conectando al SAT (${fi} a ${ff})...` });
+    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} → ${ff} (facfiel síncrono)`);
+    actualizarJob(jobId, { estado: 'procesando', progreso: `Consultando al SAT (${fi} a ${ff})...` });
 
-    let emitidos = 0, recibidos = 0;
     const errores = [];
 
-    // ── Emitidos ──────────────────────────────────────────────────────────────
-    try {
-      actualizarJob(jobId, { estado: 'procesando_e', progreso: 'SAT: solicitando emitidos...' });
-      emitidos = await descargarTipo(
-        efirma, rfc, 'emitidos', fi, ff,
-        path.join(base, 'emitidos'),
-        msg => actualizarJob(jobId, { progreso: msg })
-      );
-      actualizarJob(jobId, { emitidos });
-      log(`[Job ${jobId}] Emitidos: ${emitidos} XMLs descargados`);
-    } catch (e) {
-      log(`[Job ${jobId}] Error E: ${e.message}`);
-      errores.push({ tipo: 'E', mensaje: e.message });
-      actualizarJob(jobId, { errores: [...errores] });
+    // Emitidos y recibidos EN PARALELO (cada uno es una sola llamada rápida).
+    const [rE, rR] = await Promise.allSettled([
+      descargarTipo(efirma, rfc, 'emitidos',  fi, ff, path.join(base, 'emitidos'),  m => actualizarJob(jobId, { progreso: m })),
+      descargarTipo(efirma, rfc, 'recibidos', fi, ff, path.join(base, 'recibidos'), m => actualizarJob(jobId, { progreso: m })),
+    ]);
+
+    if (rE.status === 'fulfilled') {
+      actualizarJob(jobId, { emitidos: rE.value });
+      log(`[Job ${jobId}] Emitidos: ${rE.value} XMLs`);
+    } else {
+      const msg = (rE.reason && rE.reason.message) || String(rE.reason);
+      log(`[Job ${jobId}] Error E: ${msg}`);
+      errores.push({ tipo: 'E', mensaje: msg });
     }
 
-    // ── Recibidos ─────────────────────────────────────────────────────────────
-    try {
-      actualizarJob(jobId, { estado: 'procesando_r', progreso: 'SAT: solicitando recibidos...' });
-      recibidos = await descargarTipo(
-        efirma, rfc, 'recibidos', fi, ff,
-        path.join(base, 'recibidos'),
-        msg => actualizarJob(jobId, { progreso: msg })
-      );
-      actualizarJob(jobId, { recibidos });
-      log(`[Job ${jobId}] Recibidos: ${recibidos} XMLs descargados`);
-    } catch (e) {
-      log(`[Job ${jobId}] Error R: ${e.message}`);
-      errores.push({ tipo: 'R', mensaje: e.message });
-      actualizarJob(jobId, { errores: [...errores] });
+    if (rR.status === 'fulfilled') {
+      actualizarJob(jobId, { recibidos: rR.value });
+      log(`[Job ${jobId}] Recibidos: ${rR.value} XMLs`);
+    } else {
+      const msg = (rR.reason && rR.reason.message) || String(rR.reason);
+      log(`[Job ${jobId}] Error R: ${msg}`);
+      errores.push({ tipo: 'R', mensaje: msg });
     }
 
-    // ── Clasificar y calcular IVA ─────────────────────────────────────────────
     actualizarJob(jobId, { estado: 'clasificando', progreso: 'Clasificando CFDIs y calculando IVA...' });
     const datos = calcularIVA(tempXmlPath, rfc);
     log(`[Job ${jobId}] Listo: emitidos=${datos.emitidos.length} recibidos=${datos.recibidos.length} IVA=${datos.resultado}`);
