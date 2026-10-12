@@ -132,6 +132,7 @@ async function consultaFac(rfc, efirma, { tipo, fechaIni, fechaFin }) {
       'api-version': '2',
       tipo,                        // emitidos | recibidos
       tipoBusqueda: 1,             // 1 = por rango de fechas
+      estatusFactura: 1,           // -1 Todos, 0 Cancelados, 1 Vigentes (recibidos lo exige)
       fecha_inicial: fechaIni,     // yyyy-MM-dd HH:mm:ss
       fecha_final: fechaFin,
       descargaComprobantes: true,  // incluye el XML (content) en la respuesta
@@ -156,13 +157,14 @@ async function consultaFac(rfc, efirma, { tipo, fechaIni, fechaFin }) {
 /** Igual que consultaFac pero NO lanza: devuelve un resumen de la respuesta CRUDA de
  *  SatGo para diagnóstico (status, success, count, requestId, nComprobantes, llaves).
  *  Sirve para ver por qué una consulta devuelve 0 sin tener acceso a los logs. */
-async function consultaFacDebug(rfc, efirma, { tipo, fechaIni, fechaFin }) {
+async function consultaFacDebug(rfc, efirma, { tipo, fechaIni, fechaFin, estatus }) {
   let jwt;
   try { jwt = await getJwt(); } catch (e) { return { paso: 'jwt', error: e.message }; }
+  const estatusFactura = (estatus != null && estatus !== '') ? Number(estatus) : 1;
   let r;
   try {
     r = await axios.post(`${BASE}/api/v2/Consultar/facfiel`, efirmaForm(efirma), {
-      params: { 'api-version': '2', tipo, tipoBusqueda: 1, fecha_inicial: fechaIni, fecha_final: fechaFin, descargaComprobantes: true, descargaPdfs: false },
+      params: { 'api-version': '2', tipo, tipoBusqueda: 1, estatusFactura, fecha_inicial: fechaIni, fecha_final: fechaFin, descargaComprobantes: true, descargaPdfs: false },
       headers: { Authorization: `Bearer ${jwt}`, RFC: rfc },
       timeout: 180000, validateStatus: () => true, maxBodyLength: Infinity, maxContentLength: Infinity,
     });
@@ -172,6 +174,7 @@ async function consultaFacDebug(rfc, efirma, { tipo, fechaIni, fechaFin }) {
   const comps = d.comprobantes || d.Comprobantes || [];
   const primero = comps[0] || null;
   return {
+    estatusFactura,
     status: r.status,
     dataTipo: typeof r.data,
     dataKeys: esObj ? Object.keys(d).slice(0, 30) : null,

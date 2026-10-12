@@ -221,7 +221,8 @@ router.get('/api/debug-facfiel', requireAuth, async (req, res) => {
     // Permite probar rangos a mano: ?fi=2026-10-01 00:00:00&ff=2026-10-11 23:59:59
     const fi = req.query.fi ? String(req.query.fi) : per.fi;
     const ff = req.query.ff ? String(req.query.ff) : per.ff;
-    const out = await satgo.consultaFacDebug(rfc, { cerPath, keyPath, password: efirmaPassword }, { tipo, fechaIni: fi, fechaFin: ff });
+    const estatus = req.query.estatus;   // -1 Todos, 0 Cancelados, 1 Vigentes (default 1)
+    const out = await satgo.consultaFacDebug(rfc, { cerPath, keyPath, password: efirmaPassword }, { tipo, fechaIni: fi, fechaFin: ff, estatus });
     res.json({ rfc, tipo, periodo: { fi, ff }, ...out });
   } catch (e) {
     res.status(500).json({ error: e.message });
