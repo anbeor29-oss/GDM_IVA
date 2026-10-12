@@ -202,10 +202,13 @@ function construirXlsx(rows) {
 
 // ── Info de sesión ────────────────────────────────────────────────────────────
 router.get('/api/sesion', requireAuth, (req, res) => {
+  // "Día" = AYER en hora de México (el periodo de consulta llega hasta ayer).
+  const mx = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+  const ayer = new Date(mx.getTime() - 24 * 60 * 60 * 1000);
   res.json({
     nombre: req.session.nombre,
     rfc:    req.session.rfc,
-    dia:    new Date().getDate()
+    dia:    ayer.getDate()
   });
 });
 

@@ -43,12 +43,17 @@
     <button class="btn-cargar" id="btnCargar">&#8635; Descargar del SAT</button>
     <a href="/dashboard/exportar" id="btnExcel" class="btn-cargar" style="background:#16a34a;text-decoration:none;display:none"
        title="Descargar el detalle y el resumen de IVA en Excel (.xlsx)">&#8595; Excel</a>
+    <button class="btn-cargar" id="btnDiag" style="background:#64748b" title="Diagnóstico técnico de la consulta al SAT (para soporte)">&#128295;</button>
     <a href="/logout">Salir</a>
   </div>
 </nav>
 
 <div class="dashboard-wrap">
   <div id="msgEstado" style="display:none;padding:.5rem 1rem;font-size:.85rem;text-align:center"></div>
+  <div id="diagWrap" style="display:none;padding:.5rem 1rem">
+    <textarea id="diagBox" readonly onclick="this.select()" style="width:100%;height:220px;font-family:monospace;font-size:.72rem;border:1px solid #cbd5e1;border-radius:8px;padding:.5rem"></textarea>
+    <div style="font-size:.72rem;color:#64748b;margin-top:.2rem">Clic en el recuadro para seleccionar todo, cópialo y pégaselo a soporte.</div>
+  </div>
 
   <div class="paneles">
     <!-- Panel izquierdo: Emitidos -->
@@ -362,6 +367,23 @@ document.getElementById('btnConfirmarDescarga').addEventListener('click', functi
       finalizarDescarga(btn);
       mostrarMensaje('Error al iniciar descarga: ' + e.message, 'error');
     });
+});
+
+// Diagnóstico: consulta directa a SatGo (facfiel) para emitidos y recibidos, y muestra
+// la respuesta cruda en el recuadro (para copiar/pegar a soporte).
+document.getElementById('btnDiag').addEventListener('click', function() {
+  var b = this; b.disabled = true; b.textContent = '…';
+  var out = {};
+  Promise.all(['emitidos', 'recibidos'].map(function(tipo) {
+    return fetch('/dashboard/api/debug-facfiel?tipo=' + tipo)
+      .then(function(r) { return r.json().catch(function(){ return { status: r.status, noJson: true }; }); })
+      .then(function(j) { out[tipo] = j; })
+      .catch(function(e) { out[tipo] = { error: String(e) }; });
+  })).then(function() {
+    document.getElementById('diagBox').value = JSON.stringify(out, null, 2);
+    document.getElementById('diagWrap').style.display = 'block';
+    b.disabled = false; b.textContent = '🔧';
+  });
 });
 </script>
 </body>

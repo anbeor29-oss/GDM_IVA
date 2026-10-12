@@ -127,23 +127,34 @@ async function descarga(rfc, efirma, idPaquete) {
  *  devolver sólo `requestId` (modo metadata) en vez de los comprobantes. */
 async function consultaFac(rfc, efirma, { tipo, fechaIni, fechaFin }) {
   const jwt = await getJwt();
-  const r = await axios.post(`${BASE}/api/v2/Consultar/facfiel`, efirmaForm(efirma), {
-    params: {
-      'api-version': '2',
-      tipo,                        // emitidos | recibidos
-      tipoBusqueda: 1,             // 1 = por rango de fechas
-      estatusFactura: 1,           // -1 Todos, 0 Cancelados, 1 Vigentes (recibidos lo exige)
-      fecha_inicial: fechaIni,     // yyyy-MM-dd HH:mm:ss
-      fecha_final: fechaFin,
-      descargaComprobantes: true,  // incluye el XML (content) en la respuesta
-      descargaPdfs: false,
-    },
-    headers: { Authorization: `Bearer ${jwt}`, RFC: rfc },
-    timeout: 180000,               // síncrono, pero la respuesta puede ser grande
-    validateStatus: () => true,
-    maxBodyLength: Infinity, maxContentLength: Infinity,
-  });
-  if (r.status < 200 || r.status >= 300) throw new Error(`facfiel ${tipo} → ${r.status}: ${textoErr(r)}`);
+  const params = {
+    'api-version': '2',
+    tipo,                        // emitidos | recibidos
+    tipoBusqueda: 1,             // 1 = por rango de fechas
+    estatusFactura: 1,           // -1 Todos, 0 Cancelados, 1 Vigentes (recibidos lo exige)
+    fecha_inicial: fechaIni,     // yyyy-MM-dd HH:mm:ss
+    fecha_final: fechaFin,
+    descargaComprobantes: true,  // incluye el XML (content) en la respuesta
+    descargaPdfs: false,
+  };
+  // El SAT a veces responde "respuesta inesperada / intente de nuevo" (transitorio).
+  // Reintentamos hasta 3 veces con espera creciente antes de rendirnos.
+  let r, errTxt = '';
+  for (let i = 1; i <= 3; i++) {
+    r = await axios.post(`${BASE}/api/v2/Consultar/facfiel`, efirmaForm(efirma), {
+      params,
+      headers: { Authorization: `Bearer ${jwt}`, RFC: rfc },
+      timeout: 180000,            // síncrono, pero la respuesta puede ser grande
+      validateStatus: () => true,
+      maxBodyLength: Infinity, maxContentLength: Infinity,
+    });
+    if (r.status >= 200 && r.status < 300) break;
+    errTxt = textoErr(r);
+    const transitorio = r.status >= 500 || (r.status === 400 && /inesperada|intente|unexpected|try again|timeout/i.test(errTxt));
+    log(`[SatGo] facfiel ${tipo} → ${r.status} (intento ${i}/3): ${String(errTxt).slice(0, 160)}`);
+    if (!transitorio || i === 3) throw new Error(`facfiel ${tipo} → ${r.status}: ${errTxt}`);
+    await new Promise(res => setTimeout(res, 5000 * i));   // 5s, 10s
+  }
   const d = r.data || {};
   if (d.success === false || d.Success === false) {
     throw new Error(`facfiel ${tipo}: ${d.errorMessage || d.ErrorMessage || 'rechazada por el SAT'}`);
