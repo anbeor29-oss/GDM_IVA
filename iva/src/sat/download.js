@@ -26,9 +26,16 @@ function periodoMesActual() {
   const y   = now.getFullYear();
   const mm  = String(now.getMonth() + 1).padStart(2, '0');
   const p   = n => String(n).padStart(2, '0');
+  const dia = now.getDate();
   const fi  = `${y}-${mm}-01 00:00:00`;
-  const ff  = `${y}-${mm}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
-  return { anio: y, mesNum: mm, fi, ff };
+  // El SAT NO tiene el día en curso y lo rechaza (400 "respuesta inesperada"), por eso
+  // la fecha final se corta en AYER 23:59:59.
+  if (dia <= 1) {
+    // Día 1: el mes en curso aún no tiene días cerrados → nada que consultar.
+    return { anio: y, mesNum: mm, fi, ff: fi, vacio: true };
+  }
+  const ff = `${y}-${mm}-${p(dia - 1)} 23:59:59`;
+  return { anio: y, mesNum: mm, fi, ff, vacio: false };
 }
 
 // ── Guarda a disco los XML (base64) que devolvió facfiel ────────────────────────
@@ -89,36 +96,43 @@ async function ejecutarDescargaJob(jobId, { cerPath, keyPath, password, rfc, tem
     try { loadEFirma(cerPath, keyPath, password); }
     catch (e) { throw new Error(`e.firma inválida: ${e.message}`); }
 
-    const { anio, mesNum, fi, ff } = periodoMesActual();
+    const { anio, mesNum, fi, ff, vacio } = periodoMesActual();
     const base = path.join(tempXmlPath.replace(/\\/g, '/'), rfc, `${anio}${mesNum}`);
 
-    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} → ${ff} (facfiel síncrono)`);
+    log(`[Job ${jobId}] RFC=${rfc} periodo ${fi} → ${ff} (facfiel síncrono)${vacio ? ' [día 1: vacío]' : ''}`);
     actualizarJob(jobId, { estado: 'procesando', progreso: `Consultando al SAT (${fi} a ${ff})...` });
 
     const errores = [];
 
-    // Emitidos y recibidos EN PARALELO (cada uno es una sola llamada rápida).
-    const [rE, rR] = await Promise.allSettled([
-      descargarTipo(efirma, rfc, 'emitidos',  fi, ff, path.join(base, 'emitidos'),  m => actualizarJob(jobId, { progreso: m })),
-      descargarTipo(efirma, rfc, 'recibidos', fi, ff, path.join(base, 'recibidos'), m => actualizarJob(jobId, { progreso: m })),
-    ]);
-
-    if (rE.status === 'fulfilled') {
-      actualizarJob(jobId, { emitidos: rE.value });
-      log(`[Job ${jobId}] Emitidos: ${rE.value} XMLs`);
+    if (vacio) {
+      // Día 1 del mes: el mes en curso aún no tiene días cerrados → limpiamos y vacío.
+      log(`[Job ${jobId}] Día 1: sin días cerrados del mes en curso.`);
+      guardarComprobantes([], path.join(base, 'emitidos'));
+      guardarComprobantes([], path.join(base, 'recibidos'));
     } else {
-      const msg = (rE.reason && rE.reason.message) || String(rE.reason);
-      log(`[Job ${jobId}] Error E: ${msg}`);
-      errores.push({ tipo: 'E', mensaje: msg });
-    }
+      // Emitidos y recibidos EN PARALELO (cada uno es una sola llamada rápida).
+      const [rE, rR] = await Promise.allSettled([
+        descargarTipo(efirma, rfc, 'emitidos',  fi, ff, path.join(base, 'emitidos'),  m => actualizarJob(jobId, { progreso: m })),
+        descargarTipo(efirma, rfc, 'recibidos', fi, ff, path.join(base, 'recibidos'), m => actualizarJob(jobId, { progreso: m })),
+      ]);
 
-    if (rR.status === 'fulfilled') {
-      actualizarJob(jobId, { recibidos: rR.value });
-      log(`[Job ${jobId}] Recibidos: ${rR.value} XMLs`);
-    } else {
-      const msg = (rR.reason && rR.reason.message) || String(rR.reason);
-      log(`[Job ${jobId}] Error R: ${msg}`);
-      errores.push({ tipo: 'R', mensaje: msg });
+      if (rE.status === 'fulfilled') {
+        actualizarJob(jobId, { emitidos: rE.value });
+        log(`[Job ${jobId}] Emitidos: ${rE.value} XMLs`);
+      } else {
+        const msg = (rE.reason && rE.reason.message) || String(rE.reason);
+        log(`[Job ${jobId}] Error E: ${msg}`);
+        errores.push({ tipo: 'E', mensaje: msg });
+      }
+
+      if (rR.status === 'fulfilled') {
+        actualizarJob(jobId, { recibidos: rR.value });
+        log(`[Job ${jobId}] Recibidos: ${rR.value} XMLs`);
+      } else {
+        const msg = (rR.reason && rR.reason.message) || String(rR.reason);
+        log(`[Job ${jobId}] Error R: ${msg}`);
+        errores.push({ tipo: 'R', mensaje: msg });
+      }
     }
 
     actualizarJob(jobId, { estado: 'clasificando', progreso: 'Clasificando CFDIs y calculando IVA...' });

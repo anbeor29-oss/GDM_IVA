@@ -217,7 +217,10 @@ router.get('/api/debug-facfiel', requireAuth, async (req, res) => {
     const { rfc, cerPath, keyPath, efirmaPassword } = req.session;
     if (!cerPath || !keyPath || !efirmaPassword) return res.status(400).json({ error: 'Sin e.firma en sesión. Entra al dashboard primero.' });
     const tipo = req.query.tipo === 'recibidos' ? 'recibidos' : 'emitidos';
-    const { fi, ff } = periodoMesActual();
+    const per = periodoMesActual();
+    // Permite probar rangos a mano: ?fi=2026-10-01 00:00:00&ff=2026-10-11 23:59:59
+    const fi = req.query.fi ? String(req.query.fi) : per.fi;
+    const ff = req.query.ff ? String(req.query.ff) : per.ff;
     const out = await satgo.consultaFacDebug(rfc, { cerPath, keyPath, password: efirmaPassword }, { tipo, fechaIni: fi, fechaFin: ff });
     res.json({ rfc, tipo, periodo: { fi, ff }, ...out });
   } catch (e) {
