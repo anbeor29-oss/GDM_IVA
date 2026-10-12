@@ -18,7 +18,30 @@ nunca se manda a un tercero distinto del propio SatGo.
 
 ---
 
-## Flujo (3 pasos) — `src/sat/satgo.js`
+## Motor actual: consulta **SÍNCRONA** (`facfiel`) — desde 2026‑10‑12
+
+La descarga masiva (abajo) es **asíncrona**: el SAT encola la solicitud y arma el
+paquete, y "recibidos" tardaba **30+ min "verificando"**. Por eso el motor pasó a la
+consulta **síncrona**:
+
+> **`POST /api/v2/Consultar/facfiel`** — misma **e.firma (FIEL)**, `tipo`
+> (emitidos/recibidos), `tipoBusqueda=1`, `fecha_inicial`/`fecha_final`,
+> `descargaComprobantes=true`. Devuelve `comprobantes[]`, cada uno con su **XML en
+> base64 en el campo `content`**, en **una sola llamada** (segundos).
+
+- `satgo.consultaFac()` hace la llamada; `download.js` pide emitidos y recibidos **en
+  paralelo**, decodifica `content`, escribe los XML a la carpeta del mes (snapshot:
+  limpia antes para no dejar cancelados viejos) y corre el mismo `calcularIVA`.
+- **Cancelados:** se filtran en código por `estadoDeComprobante` (contiene "cancel").
+- **Alto volumen:** si `facfiel` devuelve sólo `requestId` (sin comprobantes), hay que
+  caer al flujo asíncrono de abajo (pendiente de implementar ese *fallback*).
+
+> El flujo de 3 pasos de abajo **sigue en `satgo.js`** (solicita/verifica/descarga)
+> como respaldo, pero **ya no es el camino normal**.
+
+---
+
+## Flujo asíncrono de respaldo (3 pasos) — `src/sat/satgo.js`
 
 1. **`solicita`** → `POST /api/v2/SatWebService/solicita`
    - query: `tipo=emitidos|recibidos`, `fecha_inicial`, `fecha_final` (`yyyy-MM-dd HH:mm:ss`),
