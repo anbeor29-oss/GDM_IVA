@@ -10,7 +10,8 @@ const {
   getAdmin, updateAdminPassword,
   getAllUsuarios, getUsuarioById,
   createUsuario, updateUsuario, toggleUsuario, deleteUsuario,
-  marcarPagado, bloquearComercial, setExcelHabilitado
+  marcarPagado, bloquearComercial, setExcelHabilitado,
+  acreditarPago, saldoCreditos, listarUso, listarPagos
 } = require('../db/database');
 
 // Usar disco persistente en producción (Render: /var/data/efirmas)
@@ -196,6 +197,47 @@ router.post('/usuarios/:id/excel', requireAdmin, (req, res) => {
   const on = raw === true || raw === 'true' || raw === 1 || raw === '1';
   setExcelHabilitado(u.id, on);
   res.json({ ok: true, excel_habilitado: on ? 1 : 0 });
+});
+
+// ─── Acreditar créditos (paquete prepago) tras un pago manual ─────────────────
+// body: { creditos, monto, metodo, referencia, concepto, dias? }
+router.post('/usuarios/:id/creditos', requireAdmin, (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'No encontrado' });
+  const creditos = parseInt(req.body && req.body.creditos, 10) || 0;
+  const monto = parseFloat(req.body && req.body.monto) || 0;
+  const dias = parseInt(req.body && req.body.dias, 10) || 0;
+  if (creditos <= 0 && dias <= 0) return res.status(400).json({ error: 'Indica créditos o días a acreditar.' });
+  const r = acreditarPago(u.id, {
+    creditos, monto, dias: dias || undefined,
+    metodo: (req.body && req.body.metodo) || null,
+    referencia: (req.body && req.body.referencia) || null,
+    concepto: (req.body && req.body.concepto) || 'Paquete de consultas',
+    adminUser: req.session.adminUser,
+  });
+  res.json({ ok: true, saldo: r.saldo });
+});
+
+// ─── Detalle comercial de un usuario (saldo + uso + pagos) ────────────────────
+router.get('/api/usuarios/:id/detalle', requireAdmin, (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'No encontrado' });
+  res.json({ saldo: saldoCreditos(u.id), uso: listarUso(u.id), pagos: listarPagos(u.id) });
+});
+
+// ─── Exportar leads / CRM (autoregistros) a CSV ───────────────────────────────
+router.get('/leads.csv', requireAdmin, (req, res) => {
+  const filas = getAllUsuarios().filter((u) => u.origen === 'AUTOREGISTRO');
+  const cols = ['id', 'nombre', 'empresa', 'rfc', 'username', 'telefono', 'como_conocio',
+                'estado', 'creditos', 'vigencia_fin', 'aviso_at', 'created_at'];
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = '﻿' + [cols.join(','), ...filas.map((f) => cols.map((c) => esc(f[c])).join(','))].join('\r\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="leads_iva_${new Date().toISOString().slice(0,10)}.csv"`);
+  res.send(csv);
 });
 
 // ─── Eliminar usuario ─────────────────────────────────────────────────────────

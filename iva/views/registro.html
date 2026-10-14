@@ -67,9 +67,38 @@
         <input type="email" name="email" placeholder="tucorreo@empresa.com" required>
         <p class="hint">A este correo llegarán tus facturas y será tu <b>usuario de acceso</b>.</p>
 
+        <div class="row">
+          <div>
+            <label>📞 Teléfono</label>
+            <input type="tel" name="telefono" placeholder="449 123 4567" inputmode="tel" maxlength="20">
+          </div>
+          <div>
+            <label>🏢 Empresa</label>
+            <input type="text" name="empresa" placeholder="Nombre comercial (opcional)">
+          </div>
+        </div>
+
+        <label>👋 ¿Cómo nos conociste?</label>
+        <select name="como_conocio">
+          <option value="">— Selecciona (opcional) —</option>
+          <option value="RECOMENDACION">Recomendación</option>
+          <option value="GOOGLE">Búsqueda en Google</option>
+          <option value="REDES">Redes sociales</option>
+          <option value="CONTADOR">Mi contador</option>
+          <option value="GDM">Ya soy cliente de GDM / HCGM</option>
+          <option value="OTRO">Otro</option>
+        </select>
+
         <p style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:9px;padding:.7rem .85rem;font-size:.8rem;line-height:1.5;margin:-.3rem 0 1rem">
           🔒 Al crear tu cuenta te damos un <b>usuario y una contraseña temporal</b> (con tu correo). Después subes tu <b>e.firma</b>: se usa <b>solo para consultar tu IVA ante el SAT</b> en el momento. <b>No almacenamos tu información fiscal.</b>
         </p>
+
+        <label style="display:flex; gap:.5rem; align-items:flex-start; font-weight:500; margin:.2rem 0 1rem;">
+          <input type="checkbox" name="aviso" value="on" required style="width:auto; margin:.2rem 0 0;">
+          <span style="font-size:.82rem; color:#475569;">He leído y acepto el
+            <a href="/aviso-privacidad.html" target="_blank" style="color:#2563eb; font-weight:600;">Aviso de Privacidad</a>
+            y el tratamiento de mis datos para contacto y facturación (LFPDPPP). <span class="req">*</span></span>
+        </label>
 
         <button type="submit" class="btn">🛡️ Crear mi cuenta</button>
       </form>
@@ -83,6 +112,7 @@
       correo: 'El correo no tiene un formato válido.',
       rfc: 'El RFC no tiene un formato válido (12-13 caracteres).',
       existe: 'Ya existe una cuenta con ese correo. Inicia sesión o usa otro correo.',
+      aviso: 'Debes aceptar el Aviso de Privacidad para continuar.',
       error: 'No se pudo crear la cuenta. Intenta de nuevo.'
     };
     if (err && msgs[err]) { const a = document.getElementById('alerta'); a.textContent = msgs[err]; a.style.display='block'; }

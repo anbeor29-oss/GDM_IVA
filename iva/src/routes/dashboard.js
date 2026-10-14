@@ -9,7 +9,7 @@ const { calcularIVA }         = require('../sat/parser');
 const { crearJob, obtenerJob }= require('../jobs/manager');
 const { satLimiter }          = require('../security/rateLimiter');
 const { log }                 = require('../security/attackHandler');
-const { getUsuarioById, estadoAcceso, registrarConsultaPrueba } = require('../db/database');
+const { getUsuarioById, estadoAcceso, consumir, saldoCreditos, registrarUso } = require('../db/database');
 
 const TEMP_XML_PATH = (process.env.TEMP_XML_PATH || 'C:/temp2xml').replace(/\\/g, '/');
 
@@ -49,6 +49,7 @@ router.get('/api/estado-cuenta', requireAuth, (req, res) => {
     puede: acc.puede, motivo: acc.motivo,
     pruebasRestantes: acc.pruebasRestantes != null ? acc.pruebasRestantes : null,
     diasRestantes: acc.diasRestantes != null ? acc.diasRestantes : null,
+    creditosRestantes: acc.creditosRestantes != null ? acc.creditosRestantes : (u ? saldoCreditos(u.id) : 0),
     excel: !!(u && u.excel_habilitado),
   });
 });
@@ -76,10 +77,14 @@ router.post('/api/iniciar-descarga', requireAuth, satLimiter, (req, res) => {
   const job = crearJob(rfc);
   log(`[Job ${job.id}] Iniciado por usuario ${req.session.nombre} RFC=${rfc}`);
 
-  // Si es una cuenta en PRUEBA, esta consulta cuenta (y puede dejarla en 0 → bloqueo).
+  // Cobro de la consulta según la vía (cliente/activo = gratis; prueba = baja 1;
+  // créditos = −1) y registro en la bitácora. Una consulta = una descarga de un mes.
+  const now = new Date();
+  const periodo = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const cobro = consumir(u.id, 'CONSULTA', { rfc, periodo });
   let prueba = null;
-  if (u && u.origen === 'AUTOREGISTRO' && u.estado === 'PRUEBA') {
-    prueba = registrarConsultaPrueba(u.id);
+  if (cobro.via === 'prueba') {
+    prueba = { restantes: cobro.restantes, bloqueado: (cobro.restantes || 0) <= 0 };
     req.session.estado = prueba.bloqueado ? 'BLOQUEADO' : 'PRUEBA';
   }
 
@@ -88,8 +93,8 @@ router.post('/api/iniciar-descarga', requireAuth, satLimiter, (req, res) => {
     cerPath, keyPath, password: efirmaPassword, rfc, tempXmlPath: TEMP_XML_PATH
   }).catch(e => log(`[Job ${job.id}] Excepción no capturada: ${e.message}`));
 
-  // Responder inmediatamente con el jobId (+ estado de prueba si aplica)
-  res.json({ ok: true, jobId: job.id, estado: 'iniciando', prueba });
+  // Responder inmediatamente con el jobId (+ estado de prueba / créditos)
+  res.json({ ok: true, jobId: job.id, estado: 'iniciando', prueba, cobro });
 });
 
 // ── PASO 2: Consultar estado del job (polling del cliente cada 10s) ───────────
@@ -142,6 +147,7 @@ router.get('/exportar', requireAuth, (req, res) => {
     const now = new Date();
     const periodo = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const buf = construirXlsx(filasDeIVA(d, rfc, periodo));
+    registrarUso(req.session.userId, { rfc, periodo, tipo: 'EXPORT', via: acc.motivo, resultado: 'OK' });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="IVA_${rfc}_${periodo}.xlsx"`);
     res.send(buf);

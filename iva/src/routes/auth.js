@@ -112,6 +112,9 @@ router.get('/registro', (req, res) => {
   res.sendFile(path.join(VIEWS, 'registro.html'));
 });
 
+// Versión del Aviso de Privacidad aceptado en el alta (LFPDPPP). Súbela si cambia el texto.
+const AVISO_VERSION = '2026-10 v1';
+
 router.post('/registro', (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
@@ -119,17 +122,25 @@ router.post('/registro', (req, res) => {
     const rfc = String(req.body.rfc || '').trim().toUpperCase();
     const cp = String(req.body.cp || '').trim();
     const regimen = String(req.body.regimen || '').trim();
+    const telefono = String(req.body.telefono || '').trim();
+    const empresa = String(req.body.empresa || '').trim();
+    const comoConocio = String(req.body.como_conocio || '').trim();
+    const aviso = req.body.aviso === 'on' || req.body.aviso === '1' || req.body.aviso === 'true';
 
     if (!nombre || !email || !rfc || !cp || !regimen) {
       return res.redirect('/registro?error=campos');
     }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.redirect('/registro?error=correo');
     if (!/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc)) return res.redirect('/registro?error=rfc');
+    if (!aviso) return res.redirect('/registro?error=aviso');   // consentimiento LFPDPPP obligatorio
 
     // El correo es el usuario → no debe existir.
     if (getUsuarioByUsername(email)) return res.redirect('/registro?error=existe');
 
-    const { tempPassword } = crearAutoRegistro({ nombre, email, rfc, cp, regimen });
+    const { tempPassword } = crearAutoRegistro({
+      nombre, email, rfc, cp, regimen,
+      telefono, empresa, comoConocio, avisoVersion: AVISO_VERSION,
+    });
     // Se muestra UNA vez en la pantalla de éxito (no viaja por URL).
     req.session.registroExito = { username: email, tempPassword };
     res.redirect('/registro-exito');
