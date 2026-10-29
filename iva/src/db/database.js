@@ -57,6 +57,7 @@ db.exec(`
   // enciende con el checkbox del admin, o automáticamente al "Marcar pagado" (la
   // anualidad de autoregistro ya incluye Excel).
   addCol('excel_habilitado', 'excel_habilitado INTEGER NOT NULL DEFAULT 0');
+  addCol('pagado_desde', 'pagado_desde TEXT');                        // fecha (YYYY-MM-DD) en que pagó la anualidad vigente
   // CRM / registro comercial (Aviso de Privacidad LFPDPPP + contacto)
   addCol('telefono', 'telefono TEXT');
   addCol('empresa', 'empresa TEXT');
@@ -319,11 +320,15 @@ function registrarConsultaPrueba(id) {
 
 /** Marca pagado: ACTIVO con vigencia de `dias` (365 por defecto) y Excel habilitado
  *  (la anualidad de autoregistro ya incluye la descarga a Excel). Devuelve la fecha fin. */
+// Fechas en hora de México (Render corre en UTC: de noche ya sería "mañana").
+// La anualidad (365) vence el MISMO día del año siguiente: pagó 29/10/2026 → 29/10/2027.
 function marcarPagado(id, dias = 365) {
-  const fin = new Date();
-  fin.setDate(fin.getDate() + dias);
+  const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+  const [y, m, d] = hoyStr.split('-').map(Number);
+  const fin = dias === 365 ? new Date(Date.UTC(y + 1, m - 1, d)) : new Date(Date.UTC(y, m - 1, d + dias));
   const finStr = fin.toISOString().slice(0, 10);
-  db.prepare("UPDATE usuarios SET estado = 'ACTIVO', vigencia_fin = ?, excel_habilitado = 1 WHERE id = ?").run(finStr, id);
+  db.prepare("UPDATE usuarios SET estado = 'ACTIVO', vigencia_fin = ?, pagado_desde = ?, excel_habilitado = 1 WHERE id = ?")
+    .run(finStr, hoyStr, id);
   return finStr;
 }
 

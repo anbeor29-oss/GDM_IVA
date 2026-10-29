@@ -173,12 +173,14 @@ router.post('/usuarios/:id/toggle', requireAdmin, (req, res) => {
 });
 
 // ─── Marcar pagado (activa la anualidad: 365 días) ────────────────────────────
-router.post('/usuarios/:id/pagar', requireAdmin, (req, res) => {
+// Además avisa a NEXO: pasa a «Usuarios reales» con alta = hoy y próximo cobro = fin.
+router.post('/usuarios/:id/pagar', requireAdmin, async (req, res) => {
   const u = getUsuarioById(req.params.id);
   if (!u) return res.status(404).json({ error: 'No encontrado' });
   const dias = parseInt(req.body && req.body.dias, 10) || 365;
   const fin = marcarPagado(u.id, dias);
-  res.json({ ok: true, vigencia_fin: fin });
+  const nexo = await sincronizarCliente(getUsuarioById(u.id), 'PAGO');
+  res.json({ ok: true, vigencia_fin: fin, nexo, url: urlFacturacionNexo() });
 });
 
 // ─── Marcar NO pagado (bloquea el acceso comercial) ───────────────────────────

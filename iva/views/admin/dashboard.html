@@ -213,6 +213,20 @@ async function acreditarCreditos(id) {
   const u = (window._usuarios || []).find((x) => x.id === id) || {};
   const nombre = u.nombre || '', origen = u.origen;
   const nexo = window.open('about:blank', '_blank');   // se abre en el clic (si no, el bloqueador de ventanas lo frena)
+  // Pago de la ANUALIDAD: activa 365 días (vence el mismo día del año siguiente) y
+  // NEXO lo pasa a «Usuarios reales» con alta = hoy y próximo cobro = esa fecha.
+  const anual = confirm(`¿"${nombre}" pagó la ANUALIDAD ($500 + IVA)?\n\nAceptar = activa 1 año + Excel y lo pasa a «Usuarios reales» en NEXO con su próximo cobro.\nCancelar = sólo créditos / ir a facturar.`);
+  if (anual) {
+    try {
+      const r = await accionAdmin(`/admin/usuarios/${id}/pagar`, { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { alert('No se pudo registrar el pago.'); if (nexo) nexo.close(); return; }
+      if (!(j.nexo && j.nexo.ok)) alert(`Pago registrado (vence ${j.vigencia_fin}), pero NEXO no lo recibió: ${(j.nexo && j.nexo.error) || 'sin respuesta'}`);
+      if (nexo) nexo.location = j.url || 'https://hcgm.com.mx/erp/admin/facturacion?panel=IVA';
+      cargarUsuarios();
+    } catch (e) { if (nexo) nexo.close(); }
+    return;
+  }
   const txt = origen === 'ADMIN' ? '' : prompt(`Créditos (consultas) a acreditar a "${nombre}" (p. ej. 5, 20, 50).\nDeja vacío para sólo ir a facturar en NEXO:`, '');
   const creditos = parseInt(txt || '', 10);
   try {

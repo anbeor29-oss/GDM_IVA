@@ -26,6 +26,9 @@ async function sincronizarCliente(u, motivo) {
       body: JSON.stringify({
         rfc: u.rfc, nombre: u.nombre, correo: u.username, telefono: u.telefono,
         cp: u.cp, regimen: u.regimen, empresa: u.empresa, motivo: motivo || 'REGISTRO',
+        // Anualidad pagada → NEXO lo pasa a «Usuarios reales» con su próximo cobro.
+        ...(u.estado === 'ACTIVO' && u.vigencia_fin
+          ? { pagadoDesde: u.pagado_desde || null, vigenciaFin: u.vigencia_fin } : {}),
       }),
       signal: AbortSignal.timeout(20000),
     });
