@@ -13,6 +13,12 @@ const adminRoutes     = require('./src/routes/admin');
 const authRoutes      = require('./src/routes/auth');
 const dashboardRoutes = require('./src/routes/dashboard');
 
+// La sesión se guarda en SQLite (disco persistente), no en memoria: así
+// sobrevive a los reinicios de Render (deploy / spin-down) y el admin no se
+// sale solo ni se "caen" las acciones del panel. Ver src/db/session-store.js.
+const { db } = require('./src/db/database');
+const SqliteSessionStore = require('./src/db/session-store');
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
@@ -73,13 +79,24 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Sesiones ─────────────────────────────────────────────────────────────────
 const IS_PROD = process.env.NODE_ENV === 'production';
+// Cookie "secure": por defecto true en producción (lo correcto con HTTPS). SÓLO si
+// Cloudflare quedó en modo "Flexible" (Cloudflare→origen por HTTP) el origen ve la
+// petición como insegura y, con secure:true, la cookie de sesión NUNCA se guarda y
+// el login "no deja entrar". En ESE caso —y sólo ese— se puede poner la variable
+// COOKIE_SECURE=false como escape; lo recomendable es dejar Cloudflare en Full SSL
+// y no tocar esto. El default NO se debilita.
+const COOKIE_SECURE = process.env.COOKIE_SECURE === 'false' ? false
+  : process.env.COOKIE_SECURE === 'true' ? true
+  : IS_PROD;
 app.use(session({
+  store: new SqliteSessionStore(db),
   secret: process.env.SESSION_SECRET || 'cambia-esto-urgente-min-32-chars!!',
   resave: false,
   saveUninitialized: false,
+  rolling: true,       // cada actividad renueva las 2 h: no te saca a media sesión
   cookie: {
     httpOnly: true,
-    secure: IS_PROD,    // true en producción (HTTPS), false en desarrollo
+    secure: COOKIE_SECURE,
     sameSite: 'lax',    // 'lax' permite navegación normal desde el sitio principal
     maxAge: 2 * 60 * 60 * 1000  // 2 horas
   }

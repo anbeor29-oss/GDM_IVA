@@ -76,9 +76,30 @@ if (params.get('ok')) {
   el.style.display = 'block';
 }
 
+// ─── Sesión expirada ──────────────────────────────────────────────────────────
+// Si la sesión del admin caducó, el servidor contesta a cualquier acción con un
+// 302 al login; el fetch lo sigue y regresa la página de login (200), así que la
+// acción "no hace nada" en silencio. Esto lo detecta y manda a entrar de nuevo,
+// en vez de dejar al admin picando botones que no responden.
+function sesionExpiro(r) {
+  return r.redirected || /\/admin\/login/.test(r.url) || r.status === 401 || r.status === 403;
+}
+async function accionAdmin(url, opts) {
+  const r = await fetch(url, opts);
+  if (sesionExpiro(r)) {
+    alert('Tu sesión de administrador expiró. Entra de nuevo.');
+    window.location.href = '/admin/login';
+    throw new Error('sesion-expirada');
+  }
+  return r;
+}
+
 async function cargarUsuarios() {
-  const res  = await fetch('/admin/api/usuarios');
-  const data = await res.json();
+  let data;
+  try {
+    const res = await accionAdmin('/admin/api/usuarios');
+    data = await res.json();
+  } catch (e) { return; }   // sesión expirada → ya se redirigió al login
   const tbody = document.getElementById('bodyUsuarios');
 
   if (!data.length) {
@@ -137,8 +158,8 @@ function estadoBadge(u) {
 }
 
 async function toggleUsuario(id, btn) {
-  await fetch(`/admin/usuarios/${id}/toggle`, { method: 'POST' });
-  cargarUsuarios();
+  try { await accionAdmin(`/admin/usuarios/${id}/toggle`, { method: 'POST' }); cargarUsuarios(); }
+  catch (e) {}
 }
 
 async function eliminarUsuario(id, nombre) {
@@ -152,14 +173,18 @@ async function eliminarUsuario(id, nombre) {
 
 async function pagarUsuario(id) {
   if (!confirm('¿Confirmar pago y activar 365 días de acceso para este cliente?')) return;
-  const r = await fetch(`/admin/usuarios/${id}/pagar`, { method: 'POST' });
-  if (r.ok) { cargarUsuarios(); } else { alert('No se pudo marcar como pagado.'); }
+  try {
+    const r = await accionAdmin(`/admin/usuarios/${id}/pagar`, { method: 'POST' });
+    if (r.ok) { cargarUsuarios(); } else { alert('No se pudo marcar como pagado.'); }
+  } catch (e) {}
 }
 
 async function bloquearUsuario(id) {
   if (!confirm('¿Marcar como NO pagado y bloquear el acceso de este cliente?')) return;
-  const r = await fetch(`/admin/usuarios/${id}/bloquear`, { method: 'POST' });
-  if (r.ok) { cargarUsuarios(); } else { alert('No se pudo bloquear.'); }
+  try {
+    const r = await accionAdmin(`/admin/usuarios/${id}/bloquear`, { method: 'POST' });
+    if (r.ok) { cargarUsuarios(); } else { alert('No se pudo bloquear.'); }
+  } catch (e) {}
 }
 
 // Acreditar un paquete de consultas (créditos prepago) tras un pago manual.
@@ -169,20 +194,25 @@ async function acreditarCreditos(id, nombre) {
   const monto = parseFloat(prompt('Monto del pago recibido (MXN, opcional):', '') || '0') || 0;
   const metodo = prompt('Método de pago (TRANSFERENCIA / EFECTIVO / TARJETA / OTRO):', 'TRANSFERENCIA') || '';
   const referencia = prompt('Referencia del pago (opcional):', '') || '';
-  const r = await fetch(`/admin/usuarios/${id}/creditos`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ creditos, monto, metodo, referencia, concepto: `Paquete de ${creditos} consultas` }),
-  });
-  if (r.ok) { const d = await r.json(); alert(`Acreditado. Saldo de créditos: ${d.saldo}.`); cargarUsuarios(); }
-  else { const e = await r.json().catch(() => ({})); alert(e.error || 'No se pudo acreditar.'); }
+  try {
+    const r = await accionAdmin(`/admin/usuarios/${id}/creditos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creditos, monto, metodo, referencia, concepto: `Paquete de ${creditos} consultas` }),
+    });
+    if (r.ok) { const d = await r.json(); alert(`Acreditado. Saldo de créditos: ${d.saldo}.`); cargarUsuarios(); }
+    else { const e = await r.json().catch(() => ({})); alert(e.error || 'No se pudo acreditar.'); }
+  } catch (e) {}
 }
 
 // Habilita/deshabilita la descarga a Excel (servicio de pago) con el checkbox.
 async function toggleExcel(id, el) {
   const on = el.checked;
-  const r = await fetch(`/admin/usuarios/${id}/excel?excel=${on}`, { method: 'POST' });
-  if (!r.ok) { el.checked = !on; alert('No se pudo cambiar el permiso de Excel.'); }
+  try {
+    const r = await accionAdmin(`/admin/usuarios/${id}/excel?excel=${on}`, { method: 'POST' });
+    if (!r.ok) { el.checked = !on; alert('No se pudo cambiar el permiso de Excel.'); return; }
+    cargarUsuarios();
+  } catch (e) { el.checked = !on; }
 }
 
 cargarUsuarios();
