@@ -7,12 +7,13 @@ const fs = require('fs');
 const router = express.Router();
 
 const {
-  getAdmin, updateAdminPassword,
+  db, getAdmin, updateAdminPassword,
   getAllUsuarios, getUsuarioById,
   createUsuario, updateUsuario, toggleUsuario, deleteUsuario,
   marcarPagado, bloquearComercial, setExcelHabilitado,
   acreditarPago, saldoCreditos, listarUso, listarPagos
 } = require('../db/database');
+const { sincronizarCliente, urlFacturacionNexo } = require('../nexo-sync');
 
 // Usar disco persistente en producción (Render: /var/data/efirmas)
 // En desarrollo usa la carpeta local uploads/efirmas/
@@ -218,6 +219,14 @@ router.post('/usuarios/:id/creditos', requireAdmin, (req, res) => {
   res.json({ ok: true, saldo: r.saldo });
 });
 
+// ─── Enviar el cliente a NEXO para facturarle (Súper Admin → Facturación → IVA) ─
+router.post('/usuarios/:id/nexo', requireAdmin, async (req, res) => {
+  const u = getUsuarioById(req.params.id);
+  if (!u) return res.status(404).json({ ok: false, error: 'No encontrado' });
+  const r = await sincronizarCliente(u, 'CREDITOS');
+  res.json({ ...r, url: urlFacturacionNexo() });
+});
+
 // ─── Detalle comercial de un usuario (saldo + uso + pagos) ────────────────────
 router.get('/api/usuarios/:id/detalle', requireAdmin, (req, res) => {
   const u = getUsuarioById(req.params.id);
@@ -241,23 +250,54 @@ router.get('/leads.csv', requireAdmin, (req, res) => {
 });
 
 // ─── Eliminar usuario ─────────────────────────────────────────────────────────
-router.post('/usuarios/:id/eliminar', requireAdmin, (req, res) => {
-  const u = getUsuarioById(req.params.id);
-  if (!u) return res.redirect('/admin/dashboard?error=noexiste');
-
-  // Eliminar archivos e-firma del servidor
+// Borra un cliente y sus archivos de e.firma — SÓLO si ningún otro usuario usa
+// los mismos archivos (dos cuentas con el mismo RFC comparten uploads/<RFC>/).
+function eliminarCliente(u) {
   try {
-    if (u.cer_path && fs.existsSync(u.cer_path)) fs.unlinkSync(u.cer_path);
-    if (u.key_path && fs.existsSync(u.key_path)) fs.unlinkSync(u.key_path);
-    const rfcDir = path.join(UPLOADS_DIR, u.rfc);
-    if (fs.existsSync(rfcDir)) {
+    const enUso = (p) => p && db.prepare(
+      'SELECT 1 FROM usuarios WHERE id <> ? AND (cer_path = ? OR key_path = ?) LIMIT 1'
+    ).get(u.id, p, p);
+    if (u.cer_path && !enUso(u.cer_path) && fs.existsSync(u.cer_path)) fs.unlinkSync(u.cer_path);
+    if (u.key_path && !enUso(u.key_path) && fs.existsSync(u.key_path)) fs.unlinkSync(u.key_path);
+    const rfcDir = path.join(UPLOADS_DIR, u.rfc || '');
+    if (u.rfc && fs.existsSync(rfcDir)) {
       const archivos = fs.readdirSync(rfcDir);
       if (archivos.length === 0) fs.rmdirSync(rfcDir);
     }
   } catch (_) {}
-
   deleteUsuario(u.id);
-  res.redirect('/admin/dashboard?ok=eliminado');
+}
+
+// Eliminar los clientes marcados con la casilla (el panel manda { ids: [...] }).
+router.post('/usuarios/eliminar-lote', requireAdmin, (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ ok: false, error: 'No marcaste ningún cliente.' });
+  let eliminados = 0; const errores = [];
+  for (const id of ids) {
+    const u = getUsuarioById(id);
+    if (!u) continue;
+    try { eliminarCliente(u); eliminados++; }
+    catch (e) { console.error('Eliminar usuario', id, e.message); errores.push(`${u.nombre}: ${e.message}`); }
+  }
+  res.json({ ok: errores.length === 0, eliminados, errores });
+});
+
+// Un solo cliente (compatibilidad: formulario → redirección; fetch → JSON).
+router.post('/usuarios/:id/eliminar', requireAdmin, (req, res) => {
+  const quiereJson = (req.get('Accept') || '').includes('application/json');
+  const u = getUsuarioById(req.params.id);
+  if (!u) {
+    return quiereJson ? res.status(404).json({ ok: false, error: 'El cliente ya no existe.' })
+                      : res.redirect('/admin/dashboard?error=noexiste');
+  }
+  try {
+    eliminarCliente(u);
+  } catch (e) {
+    console.error('Eliminar usuario', u.id, e.message);
+    return quiereJson ? res.status(500).json({ ok: false, error: 'No se pudo eliminar: ' + e.message })
+                      : res.redirect('/admin/dashboard?error=eliminar');
+  }
+  quiereJson ? res.json({ ok: true }) : res.redirect('/admin/dashboard?ok=eliminado');
 });
 
 // ─── Logout Admin ─────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.6rem;flex-wrap:wrap">
     <h2>Clientes registrados</h2>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <button class="bx bx-eliminar" id="btnEliminarSel" onclick="eliminarSeleccionados()" disabled style="opacity:.5">🗑️ Eliminar seleccionados</button>
       <a href="/admin/leads.csv"><button class="bx" style="background:#0ea5e9">⬇ Exportar leads (CSV)</button></a>
       <a href="/admin/usuarios/nuevo"><button class="btn-nuevo">+ Nuevo cliente</button></a>
     </div>
@@ -50,6 +51,7 @@
     <table id="tablaUsuarios" style="width:100%;font-size:.88rem">
       <thead>
         <tr>
+          <th style="width:28px;text-align:center"><input type="checkbox" id="chkTodos" title="Marcar todos" onchange="marcarTodos(this.checked)"></th>
           <th style="padding:.5rem">Nombre</th>
           <th>Usuario</th>
           <th>RFC</th>
@@ -61,7 +63,7 @@
         </tr>
       </thead>
       <tbody id="bodyUsuarios">
-        <tr><td colspan="8" style="padding:2rem;text-align:center;color:#94a3b8">Cargando...</td></tr>
+        <tr><td colspan="9" style="padding:2rem;text-align:center;color:#94a3b8">Cargando...</td></tr>
       </tbody>
     </table>
   </div>
@@ -100,15 +102,17 @@ async function cargarUsuarios() {
     const res = await accionAdmin('/admin/api/usuarios');
     data = await res.json();
   } catch (e) { return; }   // sesión expirada → ya se redirigió al login
+  window._usuarios = data;
   const tbody = document.getElementById('bodyUsuarios');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="padding:2rem;text-align:center;color:#94a3b8">No hay clientes registrados.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:2rem;text-align:center;color:#94a3b8">No hay clientes registrados.</td></tr>';
     return;
   }
 
   tbody.innerHTML = data.map(u => `
     <tr>
+      <td style="text-align:center"><input type="checkbox" class="chk-cli" value="${u.id}" onchange="actualizarSel()"></td>
       <td style="padding:.45rem .5rem">${u.nombre}${u.empresa ? `<br><span style="font-size:.74rem;color:#64748b">${u.empresa}</span>` : ''}</td>
       <td>${u.username}${u.telefono ? `<br><span style="font-size:.74rem;color:#64748b">${u.telefono}</span>` : ''}</td>
       <td><code>${u.rfc}</code></td>
@@ -123,12 +127,10 @@ async function cargarUsuarios() {
       <td>${u.created_at ? u.created_at.substring(0,10) : ''}</td>
       <td>
         <div class="acciones">
-          ${u.origen === 'AUTOREGISTRO' ? `<button class="bx" style="background:#0369a1" title="Acreditar un paquete de consultas (créditos) tras un pago" onclick="acreditarCreditos(${u.id}, '${(u.nombre||'').replace(/'/g,'')}')">＋ Créditos</button>` : ''}
-          ${u.origen === 'AUTOREGISTRO' ? `<button class="bx bx-pagar" title="Marcar pagado: activa 365 días y habilita Excel" onclick="pagarUsuario(${u.id})">💳 Pagado</button>` : ''}
+          <button class="bx" style="background:#0369a1" title="Acreditar créditos y abrir NEXO → Facturación → IVA para emitir la factura" onclick="acreditarCreditos(${u.id})">＋ Créditos</button>
           ${u.origen === 'AUTOREGISTRO' && u.estado === 'ACTIVO' ? `<button class="bx bx-nopagar" title="Marcar no pagado: bloquea el acceso" onclick="bloquearUsuario(${u.id})">🚫 No pagado</button>` : ''}
           <a href="/admin/usuarios/${u.id}/editar"><button class="bx bx-editar" title="Editar cliente">✏️ Editar</button></a>
           <button class="bx bx-toggle" title="${u.activo ? 'Desactivar' : 'Activar'} cliente" onclick="toggleUsuario(${u.id}, this)">${u.activo ? '⏸️ Desactivar' : '▶️ Activar'}</button>
-          <button class="bx bx-eliminar" title="Eliminar cliente" onclick="eliminarUsuario(${u.id}, '${u.nombre}')">🗑️ Eliminar</button>
         </div>
       </td>
     </tr>
@@ -162,13 +164,30 @@ async function toggleUsuario(id, btn) {
   catch (e) {}
 }
 
-async function eliminarUsuario(id, nombre) {
-  if (!confirm(`¿Eliminar al cliente "${nombre}"?\nSe borrarán sus archivos de e-firma.`)) return;
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = `/admin/usuarios/${id}/eliminar`;
-  document.body.appendChild(form);
-  form.submit();
+// Casillas: «Eliminar seleccionados» borra los clientes marcados (por fetch,
+// así una sesión expirada avisa en vez de no hacer nada).
+function seleccionados() { return [...document.querySelectorAll('.chk-cli:checked')].map((c) => parseInt(c.value, 10)); }
+function actualizarSel() {
+  const n = seleccionados().length, btn = document.getElementById('btnEliminarSel');
+  btn.disabled = n === 0; btn.style.opacity = n ? '1' : '.5';
+  btn.textContent = n ? `🗑️ Eliminar seleccionados (${n})` : '🗑️ Eliminar seleccionados';
+}
+function marcarTodos(on) { document.querySelectorAll('.chk-cli').forEach((c) => { c.checked = on; }); actualizarSel(); }
+async function eliminarSeleccionados() {
+  const ids = seleccionados();
+  if (!ids.length) return;
+  if (!confirm(`¿Eliminar ${ids.length} cliente(s)?\nSe borrarán sus archivos de e-firma (salvo los que comparta otra cuenta del mismo RFC).`)) return;
+  try {
+    const r = await accionAdmin('/admin/usuarios/eliminar-lote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) alert(j.error || ('Algunos no se pudieron eliminar:\n' + (j.errores || []).join('\n')));
+    document.getElementById('chkTodos').checked = false;
+    await cargarUsuarios();
+    actualizarSel();
+  } catch (e) {}
 }
 
 async function pagarUsuario(id) {
@@ -187,22 +206,31 @@ async function bloquearUsuario(id) {
   } catch (e) {}
 }
 
-// Acreditar un paquete de consultas (créditos prepago) tras un pago manual.
-async function acreditarCreditos(id, nombre) {
-  const creditos = parseInt(prompt(`Créditos (consultas) a acreditar a "${nombre}":\np. ej. 5, 20, 50`, '5'), 10);
-  if (!creditos || creditos <= 0) return;
-  const monto = parseFloat(prompt('Monto del pago recibido (MXN, opcional):', '') || '0') || 0;
-  const metodo = prompt('Método de pago (TRANSFERENCIA / EFECTIVO / TARJETA / OTRO):', 'TRANSFERENCIA') || '';
-  const referencia = prompt('Referencia del pago (opcional):', '') || '';
+// «+ Créditos»: (opcional) acredita el paquete aquí y luego manda al cliente a
+// NEXO → Súper Admin → Facturación → «IVA (servicio)», donde se elige la emisora y
+// se emite la factura. Si dejas vacía la captura, sólo lo envía a NEXO.
+async function acreditarCreditos(id) {
+  const u = (window._usuarios || []).find((x) => x.id === id) || {};
+  const nombre = u.nombre || '', origen = u.origen;
+  const nexo = window.open('about:blank', '_blank');   // se abre en el clic (si no, el bloqueador de ventanas lo frena)
+  const txt = origen === 'ADMIN' ? '' : prompt(`Créditos (consultas) a acreditar a "${nombre}" (p. ej. 5, 20, 50).\nDeja vacío para sólo ir a facturar en NEXO:`, '');
+  const creditos = parseInt(txt || '', 10);
   try {
-    const r = await accionAdmin(`/admin/usuarios/${id}/creditos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creditos, monto, metodo, referencia, concepto: `Paquete de ${creditos} consultas` }),
-    });
-    if (r.ok) { const d = await r.json(); alert(`Acreditado. Saldo de créditos: ${d.saldo}.`); cargarUsuarios(); }
-    else { const e = await r.json().catch(() => ({})); alert(e.error || 'No se pudo acreditar.'); }
-  } catch (e) {}
+    if (creditos > 0) {
+      const monto = parseFloat(prompt('Monto del pago recibido (MXN, sin IVA):', '') || '0') || 0;
+      const r = await accionAdmin(`/admin/usuarios/${id}/creditos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creditos, monto, metodo: 'TRANSFERENCIA', concepto: `Paquete de ${creditos} consultas` }),
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.error || 'No se pudo acreditar.'); }
+    }
+    const s2 = await accionAdmin(`/admin/usuarios/${id}/nexo`, { method: 'POST' });
+    const j = await s2.json().catch(() => ({}));
+    if (!j.ok) alert('Aviso: ' + (j.error || 'no se pudo enviar el cliente a NEXO') + '\nAbro NEXO de todos modos.');
+    if (nexo) nexo.location = j.url || 'https://hcgm.com.mx/erp/admin/facturacion?panel=IVA';
+    cargarUsuarios();
+  } catch (e) { if (nexo) nexo.close(); }
 }
 
 // Habilita/deshabilita la descarga a Excel (servicio de pago) con el checkbox.

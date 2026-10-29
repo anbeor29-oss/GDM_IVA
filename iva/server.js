@@ -58,6 +58,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc:  ["'self'", "'unsafe-inline'"],
+      // Los botones/casillas del panel usan onclick/onchange en el HTML. Helmet trae
+      // script-src-attr 'none' por defecto y los BLOQUEABA en silencio (Eliminar y el
+      // check de Excel «no hacían nada»). scriptSrc ya permite inline: esto no abre más.
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       imgSrc:     ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],

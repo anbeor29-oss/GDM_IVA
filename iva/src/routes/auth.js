@@ -10,6 +10,7 @@ const {
   getUsuarioByUsername, getUsuarioById, decryptPassword,
   crearAutoRegistro, setPasswordUsuario, setEfirmaUsuario, estadoAcceso,
 } = require('../db/database');
+const { sincronizarCliente } = require('../nexo-sync');
 
 const VIEWS = path.join(__dirname, '..', '..', 'views');
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
@@ -141,6 +142,10 @@ router.post('/registro', (req, res) => {
       nombre, email, rfc, cp, regimen,
       telefono, empresa, comoConocio, avisoVersion: AVISO_VERSION,
     });
+    // Aviso a NEXO (en 2º plano): el alta sale en Súper Admin → Facturación → IVA.
+    sincronizarCliente(getUsuarioByUsername(email), 'REGISTRO')
+      .then((r) => { if (!r.ok) console.warn('[nexo-sync] alta ' + rfc + ': ' + r.error); })
+      .catch(() => {});
     // Se muestra UNA vez en la pantalla de éxito (no viaja por URL).
     req.session.registroExito = { username: email, tempPassword };
     res.redirect('/registro-exito');

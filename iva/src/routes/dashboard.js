@@ -146,7 +146,7 @@ router.get('/exportar', requireAuth, (req, res) => {
     const d = calcularIVA(tp, rfc);
     const now = new Date();
     const periodo = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const buf = construirXlsx(filasDeIVA(d, rfc, periodo));
+    const buf = construirXlsx(hojasDeIVA(d, rfc, periodo));
     registrarUso(req.session.userId, { rfc, periodo, tipo: 'EXPORT', via: acc.motivo, resultado: 'OK' });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="IVA_${rfc}_${periodo}.xlsx"`);
@@ -158,22 +158,29 @@ router.get('/exportar', requireAuth, (req, res) => {
 });
 
 // ── Armado del .xlsx (sin dependencias nuevas: usa adm-zip, un .xlsx es un ZIP) ─
-function filasDeIVA(d, rfc, periodo) {
-  const rows = [];
-  rows.push([`IVA del periodo ${periodo} · RFC ${rfc}`]);
-  rows.push([]);
-  rows.push(['Clasificación', 'Tipo', 'Fecha', 'Serie', 'Folio', 'RFC Emisor', 'Nombre Emisor',
-             'RFC Receptor', 'Nombre Receptor', 'Subtotal/Base', 'IVA', 'Total', 'Moneda', 'UUID']);
-  const fila = (c, clas) => [clas, c.etiquetaTipo, c.fecha, c.serie, c.folio, c.rfcEmisor, c.nombreEmisor,
-                             c.rfcReceptor, c.nombreReceptor, c.subtotal, c.iva, c.total, c.moneda, c.uuid];
-  (d.emitidos || []).forEach((c) => rows.push(fila(c, 'EMITIDO (cobrado)')));
-  (d.recibidos || []).forEach((c) => rows.push(fila(c, 'RECIBIDO (pagado)')));
-  rows.push([]);
-  rows.push(['RESUMEN']);
-  rows.push(['IVA Trasladado (cobrado)', d.ivaTraslado]);
-  rows.push(['IVA Acreditable (pagado)', d.ivaAcreditable]);
-  rows.push([d.aCargo ? 'IVA a cargo' : 'IVA a favor', Math.round(Math.abs(d.resultado) * 100) / 100]);
-  return rows;
+// Tres hojas: «IVA cobrado» (emitidos), «IVA acreditable» (recibidos) y «Resumen».
+function hojasDeIVA(d, rfc, periodo) {
+  const enc = ['Tipo', 'Fecha', 'Serie', 'Folio', 'RFC Emisor', 'Nombre Emisor',
+               'RFC Receptor', 'Nombre Receptor', 'Subtotal/Base', 'IVA', 'Total', 'Moneda', 'UUID'];
+  const fila = (c) => [c.etiquetaTipo, c.fecha, c.serie, c.folio, c.rfcEmisor, c.nombreEmisor,
+                       c.rfcReceptor, c.nombreReceptor, c.subtotal, c.iva, c.total, c.moneda, c.uuid];
+  const hoja = (titulo, lista, totalIva) => {
+    const rows = [[`${titulo} del periodo ${periodo} · RFC ${rfc}`], [], enc];
+    (lista || []).forEach((c) => rows.push(fila(c)));
+    rows.push([]);
+    rows.push(['TOTAL ' + titulo.toUpperCase(), '', '', '', '', '', '', '', '', totalIva]);
+    return rows;
+  };
+  return [
+    { nombre: 'IVA cobrado', rows: hoja('IVA cobrado', d.emitidos, d.ivaTraslado) },
+    { nombre: 'IVA acreditable', rows: hoja('IVA acreditable', d.recibidos, d.ivaAcreditable) },
+    { nombre: 'Resumen', rows: [
+      [`Resumen de IVA del periodo ${periodo} · RFC ${rfc}`], [],
+      ['IVA Trasladado (cobrado)', d.ivaTraslado],
+      ['IVA Acreditable (pagado)', d.ivaAcreditable],
+      [d.aCargo ? 'IVA a cargo' : 'IVA a favor', Math.round(Math.abs(d.resultado) * 100) / 100],
+    ] },
+  ];
 }
 
 function colLetter(n) { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
@@ -184,25 +191,28 @@ function celdaXml(colIdx, rowNum, val) {
   if (typeof val === 'number' && isFinite(val)) return `<c r="${ref}"><v>${val}</v></c>`;
   return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escXml(val)}</t></is></c>`;
 }
-function construirXlsx(rows) {
+function construirXlsx(hojas) {
   const AdmZip = require('adm-zip');
-  let sheetData = '';
-  rows.forEach((row, ri) => {
-    const r = ri + 1;
-    sheetData += `<row r="${r}">${row.map((v, ci) => celdaXml(ci, r, v)).join('')}</row>`;
-  });
   const P = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-  const sheet = `${P}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`;
-  const ct = `${P}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`;
+  const sheetXml = (rows) => {
+    let sheetData = '';
+    rows.forEach((row, ri) => {
+      const r = ri + 1;
+      sheetData += `<row r="${r}">${row.map((v, ci) => celdaXml(ci, r, v)).join('')}</row>`;
+    });
+    return `${P}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`;
+  };
+  const n = hojas.map((_, i) => i + 1);
+  const ct = `${P}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${n.map((i) => `<Override PartName="/xl/worksheets/sheet${i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;
   const rels = `${P}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-  const wb = `${P}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="IVA" sheetId="1" r:id="rId1"/></sheets></workbook>`;
-  const wbRels = `${P}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`;
+  const wb = `${P}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${hojas.map((h, i) => `<sheet name="${escXml(h.nombre)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`;
+  const wbRels = `${P}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${n.map((i) => `<Relationship Id="rId${i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i}.xml"/>`).join('')}</Relationships>`;
   const zip = new AdmZip();
   zip.addFile('[Content_Types].xml', Buffer.from(ct, 'utf8'));
   zip.addFile('_rels/.rels', Buffer.from(rels, 'utf8'));
   zip.addFile('xl/workbook.xml', Buffer.from(wb, 'utf8'));
   zip.addFile('xl/_rels/workbook.xml.rels', Buffer.from(wbRels, 'utf8'));
-  zip.addFile('xl/worksheets/sheet1.xml', Buffer.from(sheet, 'utf8'));
+  hojas.forEach((h, i) => zip.addFile(`xl/worksheets/sheet${i + 1}.xml`, Buffer.from(sheetXml(h.rows), 'utf8')));
   return zip.toBuffer();
 }
 
