@@ -209,6 +209,34 @@ Commits del día: `98e5fef`, `f8857d8`, `4d3a1e5`, `68b9225`.
 
 ---
 
+## 2026-10-29 — Panel admin que sí responde, Excel en hojas y puente a NEXO
+
+**Botones muertos (causa raíz).** Helmet trae por defecto `script-src-attr 'none'`: TODOS los `onclick`/`onchange`
+del HTML quedaban bloqueados en silencio (Eliminar y el check de Excel "no hacían nada"). Fix en `server.js`:
+`scriptSrcAttr: ["'unsafe-inline'"]` (scriptSrc ya era inline; no abre más). Commit `69bd7e4`.
+
+**Admin (`views/admin/dashboard.html`, `src/routes/admin.js`):**
+- Casilla a la izquierda de cada cliente + «Eliminar seleccionados» (`POST /admin/usuarios/eliminar-lote`). No borra
+  los archivos de e.firma si otra cuenta del MISMO RFC los usa. Las acciones van por `fetch` (`accionAdmin` avisa si la
+  sesión expiró).
+- Fuera el botón «Pagado». **«+ Créditos»** pregunta primero si pagó la **ANUALIDAD** → `POST /admin/usuarios/:id/pagar`
+  (activa 1 año + Excel) y avisa a NEXO; si no, acredita créditos (opcional). Al final abre NEXO → Facturación → IVA
+  (`/admin/usuarios/:id/nexo`).
+
+**Excel del cliente:** tres hojas «IVA cobrado» (emitidos), «IVA acreditable» (recibidos) y «Resumen».
+
+**Fechas de la anualidad (`aa02294`):** `marcarPagado` usa hora de México y vence el **MISMO día del año siguiente**
+(29/10/2026 → 29/10/2027); nueva columna `usuarios.pagado_desde`.
+
+**Puente a NEXO (`src/nexo-sync.js`):** cada autoregistro y cada pago se envían a
+`NEXO_API_URL/integracion/iva/cliente` (default `https://gdm-almacen-backend.onrender.com/api/v1`) con
+`x-iva-token: NEXO_IVA_TOKEN` (= `IVA_INTEGRACION_TOKEN` del backend de NEXO). Sin token no hace nada y no rompe el
+alta. Registro → «Solicitudes en prueba»; pago → «Usuarios reales» con próximo cobro.
+
+**Operación 2026-10-29:** PABJ7311218L8 y GOJR730617E8A → ACTIVO, anualidad 29/10/2026–29/10/2027, Excel, en NEXO.
+
+---
+
 ## ⏭️ Pendientes para próximas iteraciones
 
 - [ ] Activar `MODO_PRODUCCION = true` (restringir días 10-28)
@@ -216,10 +244,10 @@ Commits del día: `98e5fef`, `f8857d8`, `4d3a1e5`, `68b9225`.
 - [ ] Aviso de privacidad (link en footer)
 - [ ] Términos de uso (link en footer)
 - [ ] Reportes históricos (consultar meses anteriores)
-- [ ] Export a Excel/PDF del reporte mensual
+- [x] Export a Excel (hojas IVA cobrado / acreditable / resumen) — PDF pendiente
 - [ ] Notificaciones por email cuando termine la descarga
 - [ ] Dashboard del admin con estadísticas de uso
 
 ---
 
-*Última actualización: 2026-10-07*
+*Última actualización: 2026-10-29*
