@@ -11,19 +11,13 @@ const {
   crearAutoRegistro, setPasswordUsuario, setEfirmaUsuario, estadoAcceso,
 } = require('../db/database');
 const { sincronizarCliente } = require('../nexo-sync');
+// La ventana de consulta (día 2 → último del mes) vive en un solo lugar.
+const { dentroDeVentana } = require('../ventana');
 
 const VIEWS = path.join(__dirname, '..', '..', 'views');
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 // En producción (Render) la e.firma va al disco persistente (UPLOADS_DIR=/var/data/efirmas).
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', '..', 'uploads', 'efirmas');
-
-// MODO PRODUCCIÓN: la consulta sólo del día 3 al 29. (Igual que el resto de la app.)
-const MODO_PRODUCCION = true;
-function dentroDeVentana() {
-  if (!MODO_PRODUCCION) return true;
-  const dia = new Date().getDate();
-  return dia >= 3 && dia <= 29;
-}
 
 function requireUser(req, res, next) {
   if (req.session && req.session.userId) return next();

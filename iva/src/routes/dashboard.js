@@ -10,20 +10,14 @@ const { crearJob, obtenerJob }= require('../jobs/manager');
 const { satLimiter }          = require('../security/rateLimiter');
 const { log }                 = require('../security/attackHandler');
 const { getUsuarioById, estadoAcceso, consumir, saldoCreditos, registrarUso } = require('../db/database');
+// La ventana de consulta (día 2 → último del mes) vive en un solo lugar.
+const { dentroDeVentana, TEXTO_VENTANA } = require('../ventana');
 
 const TEMP_XML_PATH = (process.env.TEMP_XML_PATH || 'C:/temp2xml').replace(/\\/g, '/');
 
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) return next();
   res.redirect('/login');
-}
-
-// MODO PRUEBA: sin restricción de fechas — cambiar a true en producción
-const MODO_PRODUCCION = false;
-function dentroDeVentana() {
-  if (!MODO_PRODUCCION) return true;
-  const dia = new Date().getDate();
-  return dia >= 3 && dia <= 29;
 }
 
 // ── Página del dashboard ──────────────────────────────────────────────────────
@@ -58,7 +52,7 @@ router.get('/api/estado-cuenta', requireAuth, (req, res) => {
 // El cliente recibe un jobId y hace polling con /api/estado-descarga/:jobId
 router.post('/api/iniciar-descarga', requireAuth, satLimiter, (req, res) => {
   if (!dentroDeVentana()) {
-    return res.status(403).json({ error: 'Fuera de ventana de consulta (días 3-29)' });
+    return res.status(403).json({ error: 'Fuera de ventana de consulta (' + TEXTO_VENTANA + ')' });
   }
 
   // Gating: ¿puede consultar? (prueba agotada / bloqueado / vencido)
@@ -114,7 +108,7 @@ router.get('/api/estado-descarga/:jobId', requireAuth, (req, res) => {
 // ── Leer XMLs ya descargados en disco (sin ir al SAT) ─────────────────────────
 router.get('/api/datos', requireAuth, (req, res) => {
   if (!dentroDeVentana()) {
-    return res.status(403).json({ error: 'Fuera de ventana de consulta (días 3-29)' });
+    return res.status(403).json({ error: 'Fuera de ventana de consulta (' + TEXTO_VENTANA + ')' });
   }
   try {
     const rfc  = req.session.rfc;
@@ -131,7 +125,7 @@ router.get('/api/datos', requireAuth, (req, res) => {
 
 // ── Exportar a Excel (.xlsx) el IVA del mes en curso ──────────────────────────
 router.get('/exportar', requireAuth, (req, res) => {
-  if (!dentroDeVentana()) return res.status(403).send('Fuera de ventana de consulta (días 3-29).');
+  if (!dentroDeVentana()) return res.status(403).send('Fuera de ventana de consulta (' + TEXTO_VENTANA + ').');
   const u = getUsuarioById(req.session.userId);
   const acc = estadoAcceso(u);
   if (!acc.puede) return res.status(403).send('Tu acceso está bloqueado.');
