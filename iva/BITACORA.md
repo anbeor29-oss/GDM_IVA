@@ -203,7 +203,7 @@ Commits del día: `98e5fef`, `f8857d8`, `4d3a1e5`, `68b9225`.
 - Resuelve el problema de XMLDSig de R que nosotros no pudimos resolver manualmente
 
 ### ¿Por qué disco persistente solo para `data/` y `uploads/`?
-- Los XMLs son TEMPORALES (se limpian día 28)
+- Los XMLs son TEMPORALES (se limpian el día 1 de cada mes)
 - Solo necesitamos persistir BD y e.firmas
 - Reduce costo de disco a 1 GB ($0.25/mes)
 
@@ -237,17 +237,44 @@ alta. Registro → «Solicitudes en prueba»; pago → «Usuarios reales» con p
 
 ---
 
+## 2026-10-30 — Sesiones que sobreviven a Render, ventana día 2→fin y Excel con formato
+
+**Sesiones en disco (`d81d31d`).** `express-session` usaba su **MemoryStore** por defecto (sesiones en RAM); en
+Render el proceso se reinicia (deploy) y se duerme (inactividad) y esa RAM se borra → el admin se salía solo y las
+acciones por `fetch` recibían un 302 al login sin ejecutarse. Fix: **nuevo `src/db/session-store.js`**, un store
+mínimo de express-session sobre la MISMA base better-sqlite3 (disco persistente), **sin dependencias nuevas**;
+`server.js` lo usa con `rolling:true`. Escape `COOKIE_SECURE=false` **solo** si Cloudflare quedara en modo Flexible
+(ahí `secure:true` impide guardar la cookie). *(Junto con el fix de CSP `69bd7e4`, el panel ya responde: eran dos
+causas distintas del mismo síntoma — handler inline bloqueado por CSP + sesión perdida por reinicio.)*
+
+**Ventana de consulta = día 2 al último del mes (`87638df`).** Estaba repetida y desincronizada (auth.js día 3-29 con
+`MODO_PRODUCCION=true`; dashboard.js día 3-29 pero `=false`, sin efecto; y el login decía «del 10 al 29»). Ahora **una
+sola definición** en **`src/ventana.js`**: `dentroDeVentana()` = `getDate() >= 2`. El **día 1 queda fuera** a propósito
+(ese día el scheduler borra los XML del mes anterior). `TEXTO_VENTANA` centraliza el mensaje; `VENTANA_OFF=true` lo
+desactiva para pruebas. `auth.js`/`dashboard.js` importan el módulo; `public/login.html` dice «del día 2 al último día
+de cada mes». La limpieza del día 1 (`scheduler/tasks.js`, cron `5 0 1 * *`) ya existía.
+
+**Excel con formato de la casa + pie bloqueado (`9ce039c`).** El export (`GET /dashboard/exportar`) pasa del armado
+crudo con adm-zip (sin estilos) a **ExcelJS** (dep nueva **`exceljs ^4.4.0`**, misma que NEXO; adm-zip se queda, lo usa
+la descarga SatGo). Replica el formato medido de la hoja del usuario: Aptos Narrow 11; encabezado fila 3 fondo oro
+`FFFFC000` centrado; título fila 1 negrita+cursiva; importes `#,##0.00`; «Resumen» con Trasladado rojo, Acreditable
+verde `FF196B24`, resultado azul `FF002060` negrita, y el **pie «GDM NEXO / informes whatsapp (449) 367 70 27»** (verde,
+negrita+cursiva). **El pie es inamovible:** en «Resumen» se bloquean SOLO **A9:A10** y la hoja se protege con una
+contraseña **aleatoria que no se guarda** (ni el dueño quita el candado). ⚠️ La protección de Excel es disuasivo, no
+cifrado (se puede romper con herramientas; para algo inviolable, PDF). La ruta `exportar` ahora es `async`.
+
+---
+
 ## ⏭️ Pendientes para próximas iteraciones
 
-- [ ] Activar `MODO_PRODUCCION = true` (restringir días 10-28)
-- [ ] Configurar CNAME `iva.hcgm.com.mx` → `gdm-iva.onrender.com`
-- [ ] Aviso de privacidad (link en footer)
+- [x] Ventana de consulta activa: **día 2 → último del mes** (`src/ventana.js`), limpieza día 1
+- [x] Export a Excel con **formato de la casa + pie bloqueado (A9:A10)** — **PDF aún pendiente**
 - [ ] Términos de uso (link en footer)
 - [ ] Reportes históricos (consultar meses anteriores)
-- [x] Export a Excel (hojas IVA cobrado / acreditable / resumen) — PDF pendiente
 - [ ] Notificaciones por email cuando termine la descarga
+- [ ] Envío real de los recibos/reportes por correo (hoy no existe; se marca, no se manda)
 - [ ] Dashboard del admin con estadísticas de uso
 
 ---
 
-*Última actualización: 2026-10-29*
+*Última actualización: 2026-10-30*

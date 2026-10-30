@@ -66,18 +66,26 @@ fiscal** (los CFDI y el cálculo se procesan al instante y se borran).
   **ocultos/bloqueados** sin el permiso (`/api/estado-cuenta` expone `excel`).
 - **Admin** → checkbox **"Excel"** por cliente (`POST /admin/usuarios/:id/excel`).
 - `marcarPagado` **enciende** Excel; `bloquearComercial` ("no pagado") lo **apaga**.
-- El `.xlsx` se arma sin dependencias nuevas (un `.xlsx` es un ZIP OOXML, vía `adm-zip`):
-  detalle de emitidos/recibidos + resumen (trasladado/acreditable/a cargo o a favor).
+- El `.xlsx` se arma con **ExcelJS** (dep `exceljs`) con el **formato de la casa**: tres hojas
+  —«IVA cobrado» (emitidos), «IVA acreditable» (recibidos) y «Resumen»—, fuente Aptos Narrow 11,
+  encabezados con fondo oro, importes `#,##0.00`, y el Resumen con colores (trasladado rojo,
+  acreditable verde, a cargo/favor azul). **Pie de marca «GDM NEXO / informes whatsapp …» en
+  `A9:A10` BLOQUEADO**: esas dos celdas quedan locked y la hoja se protege con contraseña
+  aleatoria que no se guarda (ni el dueño la quita; para cambiar el texto se edita el generador).
+  *La protección de Excel es un disuasivo, no un cifrado.*
 
 ---
 
 ## Panel de administración
 
 - Lista de clientes con **badge de estado** (Cliente GDM / Prueba N/2 / Bloqueado /
-  Activo·N días).
-- Botones con icono alineados: **✏️ Editar · ⏸️ Desactivar · 🗑️ Eliminar** y, para
-  prospectos, **💳 Pagado / 🚫 No pagado**.
-- Checkbox **Excel** por cliente.
+  Activo·N días) y **casilla** por cliente + **«Eliminar seleccionados»** (`POST
+  /admin/usuarios/eliminar-lote`; no borra la e.firma si otra cuenta del mismo RFC la usa).
+- **«+ Créditos»** pregunta primero si pagó la **ANUALIDAD** → `POST /admin/usuarios/:id/pagar`
+  (activa 1 año + Excel y avisa a NEXO); si no, acredita créditos sueltos.
+- Checkbox **Excel** por cliente (`POST /admin/usuarios/:id/excel`), **✏️ Editar**, **⏸️ Desactivar**.
+- Las acciones van por `fetch` con `accionAdmin()`: si la sesión expiró, avisa y manda a entrar
+  (los `onclick`/`onchange` requieren CSP `script-src-attr 'unsafe-inline'`, ya habilitado).
 
 ---
 
@@ -102,4 +110,4 @@ fiscal** (los CFDI y el cálculo se procesan al instante y se borran).
 
 ---
 
-*Actualizado: 2026‑10‑07*
+*Actualizado: 2026‑10‑30*

@@ -15,7 +15,9 @@
 > - **Modelo comercial**: autoregistro + 2 pruebas + anualidad $500+IVA; Excel de pago por
 >   usuario. Ya **no** es "solo clientes GDM". → **[`COMERCIALIZACION.md`](COMERCIALIZACION.md)**
 > - Variable nueva imprescindible: **`SATGO_API_KEY`** (API Key permanente de SatGo).
-> - Bitácora del día: **[`BITACORA.md`](BITACORA.md)**.
+> - **2026‑10‑30**: ventana de consulta **día 2 → último del mes** (`src/ventana.js`), **sesiones en
+>   disco** (sobreviven a reinicios de Render) y **Excel con formato de la casa + pie bloqueado**.
+> - Bitácora completa: **[`BITACORA.md`](BITACORA.md)**.
 
 ---
 
@@ -52,13 +54,14 @@ Sistema web que automatiza la consulta del IVA mensual de los clientes:
 ### Stack técnico
 
 - **Node.js 20+ / Express 5** — servidor web
-- **SQLite (better-sqlite3)** — BD local con admin y clientes
-- **`@nodecfdi/sat-ws-descarga-masiva`** — cliente oficial SAT
+- **SQLite (better-sqlite3)** — BD local (admin, clientes) y almacén de sesiones
+- **SatGo (REST)** — motor de descarga de CFDIs del SAT con e.firma (ver `SATGO.md`); `@nodecfdi` queda instalado pero **sin uso**
 - **node-forge** — manejo de e.firma (X.509 + RSA)
-- **express-session** — sesiones HTTP cifradas
-- **helmet + express-rate-limit** — seguridad HTTP
-- **node-cron** — tareas programadas (limpieza día 28)
+- **express-session** — sesiones HTTP, con **store en SQLite** (`src/db/session-store.js`) para que sobrevivan a los reinicios de Render
+- **helmet + express-rate-limit** — seguridad HTTP (CSP con `script-src-attr 'unsafe-inline'` para los `onclick`/`onchange` del panel)
+- **node-cron** — tareas programadas (limpieza de XML el **día 1**)
 - **fast-xml-parser** — parseo de CFDIs
+- **ExcelJS** — exportación del IVA a `.xlsx` con formato de la casa y pie de marca bloqueado
 
 ---
 
@@ -75,15 +78,19 @@ iva/
 │
 ├── src/
 │   ├── db/
-│   │   └── database.js    ← SQLite + cifrado AES-256-GCM
+│   │   ├── database.js       ← SQLite + cifrado AES-256-GCM (admin, clientes, créditos)
+│   │   └── session-store.js  ← Store de sesiones sobre la misma SQLite (sobrevive a reinicios)
 │   ├── sat/
-│   │   ├── download.js    ← Cliente SAT con @nodecfdi (job en background)
-│   │   └── parser.js      ← Reglas fiscales LIVA
+│   │   ├── satgo.js          ← Cliente SatGo (REST + e.firma) — motor actual
+│   │   ├── download.js       ← Orquesta la descarga del mes (vía SatGo)
+│   │   └── parser.js         ← Reglas fiscales LIVA
+│   ├── ventana.js            ← Ventana de consulta: día 2 → último del mes (única definición)
+│   ├── nexo-sync.js          ← Puente a NEXO (altas y pagos de IVA)
 │   ├── security/
-│   │   ├── rateLimiter.js ← Anti-DOS y bloqueo de IPs
+│   │   ├── rateLimiter.js    ← Anti-DOS y bloqueo de IPs
 │   │   └── attackHandler.js
 │   ├── scheduler/
-│   │   └── tasks.js       ← Limpieza automática día 28
+│   │   └── tasks.js          ← Limpieza automática de XML el día 1
 │   ├── jobs/
 │   │   └── manager.js     ← Manager de jobs de descarga
 │   └── routes/
@@ -133,15 +140,28 @@ Implementadas según **Art. 5 fracc. IV y Art. 17 LIVA**:
 # Entorno
 NODE_ENV=production
 
-# Sesiones (generar uno aleatorio único)
+# Motor SAT = SatGo: API Key PERMANENTE (imprescindible). Ver SATGO.md.
+SATGO_API_KEY=<api-key-permanente>
+# (alternativa) token del portal para que la app cree la key sola:
+# SATGO_PORTAL_TOKEN=<token-portal>
+
+# Sesiones (generar uno aleatorio único). Se guardan en SQLite (sobreviven a reinicios).
 SESSION_SECRET=<hex-64-chars>
 
 # Disco persistente (Render: /var/data)
 DATA_DIR=/var/data
 UPLOADS_DIR=/var/data/efirmas
 
-# Temporal para XMLs (se borra solo)
+# Temporal para XMLs (se borra solo el día 1)
 TEMP_XML_PATH=/tmp/temp2xml
+
+# Puente a NEXO (altas y pagos de IVA aparecen en NEXO → Facturación). Opcional.
+NEXO_API_URL=https://gdm-almacen-backend.onrender.com/api/v1
+NEXO_IVA_TOKEN=<= IVA_INTEGRACION_TOKEN del backend de NEXO>
+
+# Escapes (déjalos SIN poner en operación normal):
+#   COOKIE_SECURE=false  → solo si Cloudflare está en modo Flexible y el login no deja entrar
+#   VENTANA_OFF=true     → desactiva la ventana día 2→fin, para probar cualquier día
 ```
 
 ---
@@ -177,7 +197,7 @@ Start Command:   node server.js
 | Rate limit login | 5 intentos / 15 min → bloqueo IP 30 min |
 | Rate limit SAT | 10 req / min |
 | HTTPS | Let's Encrypt vía Render |
-| Cookies sesión | httpOnly + secure + sameSite=lax |
+| Cookies sesión | httpOnly + secure + sameSite=lax; store en SQLite (`session-store.js`) |
 
 ---
 
@@ -185,12 +205,14 @@ Start Command:   node server.js
 
 | Día del mes | Comportamiento |
 |---|---|
-| 1 al 9 | Acceso bloqueado (modo producción): "Disponible a partir del día 10" |
-| 10 al 28 | Sistema activo: los clientes pueden consultar su IVA |
-| Día 28 | 23:59 hrs (zona MX) → limpieza automática de XMLs |
-| 29 al fin de mes | Solo admin disponible |
+| Día 1 | Consulta **cerrada**. 00:05 (hora MX) → **limpieza automática** de los XML del mes anterior |
+| Día 2 al último | **Sistema activo**: los clientes consultan su IVA del mes en curso |
 
-**Mes que se descarga:** del día 1 al día anterior (ayer) del mes en curso.
+La ventana (**día 2 → último del mes**) vive en `src/ventana.js` (`dentroDeVentana()`); el aviso
+del login sale del mismo módulo (`TEXTO_VENTANA`). `VENTANA_OFF=true` la desactiva para pruebas.
+La limpieza del día 1 está en `src/scheduler/tasks.js` (cron `5 0 1 * *`, hora de México).
+
+**Mes que se descarga:** del día 1 al día anterior (ayer) del mes en curso, en hora de México.
 
 ---
 
@@ -224,4 +246,4 @@ Uso exclusivo de clientes contratados.
 
 ---
 
-*Última actualización: 2026-06-11*
+*Última actualización: 2026-10-30*
