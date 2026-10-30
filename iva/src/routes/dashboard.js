@@ -124,7 +124,7 @@ router.get('/api/datos', requireAuth, (req, res) => {
 });
 
 // ── Exportar a Excel (.xlsx) el IVA del mes en curso ──────────────────────────
-router.get('/exportar', requireAuth, (req, res) => {
+router.get('/exportar', requireAuth, async (req, res) => {
   if (!dentroDeVentana()) return res.status(403).send('Fuera de ventana de consulta (' + TEXTO_VENTANA + ').');
   const u = getUsuarioById(req.session.userId);
   const acc = estadoAcceso(u);
@@ -140,7 +140,7 @@ router.get('/exportar', requireAuth, (req, res) => {
     const d = calcularIVA(tp, rfc);
     const now = new Date();
     const periodo = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const buf = construirXlsx(hojasDeIVA(d, rfc, periodo));
+    const buf = await construirXlsx(d, rfc, periodo);
     registrarUso(req.session.userId, { rfc, periodo, tipo: 'EXPORT', via: acc.motivo, resultado: 'OK' });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="IVA_${rfc}_${periodo}.xlsx"`);
@@ -151,63 +151,131 @@ router.get('/exportar', requireAuth, (req, res) => {
   }
 });
 
-// ── Armado del .xlsx (sin dependencias nuevas: usa adm-zip, un .xlsx es un ZIP) ─
-// Tres hojas: «IVA cobrado» (emitidos), «IVA acreditable» (recibidos) y «Resumen».
-function hojasDeIVA(d, rfc, periodo) {
+// ── Armado del .xlsx con ExcelJS: el FORMATO DE LA CASA (el mismo que definió el
+//    usuario en su hoja) + el pie de marca BLOQUEADO en «Resumen» ───────────────
+//
+// FORMATO (medido de la hoja que mandó el usuario):
+//   · Fuente base Aptos Narrow 11.
+//   · Encabezado de columnas en la fila 3: fondo oro (FFFFC000), centrado.
+//   · Título en la fila 1: negrita + cursiva.
+//   · Importes (Subtotal/IVA/Total) con formato #,##0.00 a la derecha.
+//   · «Resumen»: Trasladado en rojo, Acreditable en verde, el resultado en azul
+//     marino (negrita) y el pie «GDM NEXO / informes whatsapp …» en verde.
+//
+// EL PIE NO SE PUEDE QUITAR: A9:A10 quedan BLOQUEADAS y la hoja «Resumen» se
+// protege con una contraseña ALEATORIA que no se guarda en ningún lado — ni el
+// dueño puede quitar el candado. (La protección de Excel es un disuasivo, no un
+// cifrado: con herramientas se puede romper; para algo inviolable iría un PDF.)
+const NARROW   = 'Aptos Narrow';
+const C_NEGRO  = 'FF000000';   // texto normal
+const C_ROJO   = 'FFFF0000';   // IVA trasladado (cobrado)
+const C_VERDE  = 'FF196B24';   // IVA acreditable + pie de marca (accent3 del archivo)
+const C_AZUL   = 'FF002060';   // IVA a cargo / a favor
+const C_ORO    = 'FFFFC000';   // fondo del encabezado
+const FMT_PESOS = '#,##0.00';
+
+async function construirXlsx(d, rfc, periodo) {
+  const ExcelJS = require('exceljs');
+  const crypto = require('crypto');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GDM NEXO';
+
   const enc = ['Tipo', 'Fecha', 'Serie', 'Folio', 'RFC Emisor', 'Nombre Emisor',
                'RFC Receptor', 'Nombre Receptor', 'Subtotal/Base', 'IVA', 'Total', 'Moneda', 'UUID'];
   const fila = (c) => [c.etiquetaTipo, c.fecha, c.serie, c.folio, c.rfcEmisor, c.nombreEmisor,
                        c.rfcReceptor, c.nombreReceptor, c.subtotal, c.iva, c.total, c.moneda, c.uuid];
-  const hoja = (titulo, lista, totalIva) => {
-    const rows = [[`${titulo} del periodo ${periodo} · RFC ${rfc}`], [], enc];
-    (lista || []).forEach((c) => rows.push(fila(c)));
-    rows.push([]);
-    rows.push(['TOTAL ' + titulo.toUpperCase(), '', '', '', '', '', '', '', '', totalIva]);
-    return rows;
+  const COLS_IMPORTE = [9, 10, 11];   // Subtotal, IVA, Total (1-based)
+  const COL_MONEDA = 12;
+
+  const hojaDetalle = (titulo, lista, totalIva) => {
+    const ws = wb.addWorksheet(titulo);
+    const t = ws.getCell('A1');
+    t.value = `${titulo} del periodo ${periodo} · RFC ${rfc}`;
+    t.font = { name: NARROW, size: 11, bold: true, italic: true, color: { argb: C_NEGRO } };
+
+    enc.forEach((txt, i) => {
+      const cell = ws.getCell(3, i + 1);
+      cell.value = txt;
+      cell.font = { name: NARROW, size: 11, color: { argb: C_NEGRO } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_ORO } };
+      cell.alignment = { horizontal: 'center' };
+    });
+
+    let r = 4;
+    (lista || []).forEach((c) => {
+      fila(c).forEach((v, i) => {
+        const cell = ws.getCell(r, i + 1);
+        cell.value = v == null ? '' : v;
+        cell.font = { name: NARROW, size: 11, color: { argb: C_NEGRO } };
+        if (COLS_IMPORTE.includes(i + 1)) { cell.numFmt = FMT_PESOS; cell.alignment = { horizontal: 'right' }; }
+        else if (i + 1 === COL_MONEDA) cell.alignment = { horizontal: 'center' };
+      });
+      r++;
+    });
+    const lastData = r - 1;
+
+    r++;   // una fila en blanco antes del total
+    const lbl = ws.getCell(r, 1);
+    lbl.value = 'TOTAL ' + titulo.toUpperCase();
+    lbl.font = { name: NARROW, size: 11, bold: true, color: { argb: C_NEGRO } };
+    const tot = ws.getCell(r, 10);   // debajo de la columna IVA
+    tot.value = Number(totalIva) || 0;
+    tot.numFmt = FMT_PESOS;
+    tot.alignment = { horizontal: 'right' };
+    tot.font = { name: NARROW, size: 11, bold: true, color: { argb: C_NEGRO } };
+
+    autofitColumnas(ws, enc.length, 3, lastData);
   };
-  return [
-    { nombre: 'IVA cobrado', rows: hoja('IVA cobrado', d.emitidos, d.ivaTraslado) },
-    { nombre: 'IVA acreditable', rows: hoja('IVA acreditable', d.recibidos, d.ivaAcreditable) },
-    { nombre: 'Resumen', rows: [
-      [`Resumen de IVA del periodo ${periodo} · RFC ${rfc}`], [],
-      ['IVA Trasladado (cobrado)', d.ivaTraslado],
-      ['IVA Acreditable (pagado)', d.ivaAcreditable],
-      [d.aCargo ? 'IVA a cargo' : 'IVA a favor', Math.round(Math.abs(d.resultado) * 100) / 100],
-    ] },
-  ];
+
+  hojaDetalle('IVA cobrado', d.emitidos, d.ivaTraslado);
+  hojaDetalle('IVA acreditable', d.recibidos, d.ivaAcreditable);
+
+  // ── Resumen ──
+  const rs = wb.addWorksheet('Resumen');
+  rs.getColumn(1).width = 51;
+  const setR = (addr, val, color, o = {}) => {
+    const c = rs.getCell(addr);
+    c.value = val;
+    c.font = { name: NARROW, size: 11, color: { argb: color }, bold: !!o.bold, italic: !!o.italic };
+    if (o.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+    if (o.numFmt) c.numFmt = o.numFmt;
+    if (o.align) c.alignment = { horizontal: o.align };
+  };
+  setR('A1', `Resumen de IVA del periodo ${periodo} · RFC ${rfc}`, C_NEGRO, { fill: C_ORO });
+  setR('A3', 'IVA Trasladado (cobrado)', C_ROJO);
+  setR('B3', Number(d.ivaTraslado) || 0, C_ROJO, { numFmt: FMT_PESOS });
+  setR('A4', 'IVA Acreditable (pagado)', C_VERDE);
+  setR('B4', Number(d.ivaAcreditable) || 0, C_VERDE, { numFmt: FMT_PESOS });
+  setR('A5', d.aCargo ? 'IVA a cargo' : 'IVA a favor', C_AZUL);
+  setR('B5', Math.round(Math.abs(d.resultado) * 100) / 100, C_AZUL, { numFmt: FMT_PESOS, bold: true });
+  setR('A9', 'GDM NEXO', C_VERDE, { bold: true, italic: true, align: 'center' });
+  setR('A10', 'informes whatsapp (449) 367 70 27', C_VERDE, { bold: true, italic: true });
+
+  // Bloqueo del pie: se desbloquea el área escrita y se bloquea SOLO A9:A10; luego
+  // se protege la hoja con una contraseña aleatoria que no se guarda (no se puede quitar).
+  for (let rr = 1; rr <= 40; rr++) for (let cc = 1; cc <= 2; cc++) rs.getCell(rr, cc).protection = { locked: false };
+  rs.getCell('A9').protection = { locked: true };
+  rs.getCell('A10').protection = { locked: true };
+  await rs.protect(crypto.randomBytes(24).toString('base64'), {
+    selectLockedCells: true, selectUnlockedCells: true,
+  });
+
+  return await wb.xlsx.writeBuffer();
 }
 
-function colLetter(n) { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
-function escXml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-function celdaXml(colIdx, rowNum, val) {
-  if (val == null || val === '') return '';
-  const ref = colLetter(colIdx) + rowNum;
-  if (typeof val === 'number' && isFinite(val)) return `<c r="${ref}"><v>${val}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escXml(val)}</t></is></c>`;
-}
-function construirXlsx(hojas) {
-  const AdmZip = require('adm-zip');
-  const P = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-  const sheetXml = (rows) => {
-    let sheetData = '';
-    rows.forEach((row, ri) => {
-      const r = ri + 1;
-      sheetData += `<row r="${r}">${row.map((v, ci) => celdaXml(ci, r, v)).join('')}</row>`;
-    });
-    return `${P}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`;
-  };
-  const n = hojas.map((_, i) => i + 1);
-  const ct = `${P}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${n.map((i) => `<Override PartName="/xl/worksheets/sheet${i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;
-  const rels = `${P}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-  const wb = `${P}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${hojas.map((h, i) => `<sheet name="${escXml(h.nombre)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`;
-  const wbRels = `${P}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${n.map((i) => `<Relationship Id="rId${i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i}.xml"/>`).join('')}</Relationships>`;
-  const zip = new AdmZip();
-  zip.addFile('[Content_Types].xml', Buffer.from(ct, 'utf8'));
-  zip.addFile('_rels/.rels', Buffer.from(rels, 'utf8'));
-  zip.addFile('xl/workbook.xml', Buffer.from(wb, 'utf8'));
-  zip.addFile('xl/_rels/workbook.xml.rels', Buffer.from(wbRels, 'utf8'));
-  hojas.forEach((h, i) => zip.addFile(`xl/worksheets/sheet${i + 1}.xml`, Buffer.from(sheetXml(h.rows), 'utf8')));
-  return zip.toBuffer();
+/** Ancho de columna aproximado al contenido (como el autoajuste de Excel), mirando
+ *  SOLO el encabezado y los datos (no el título ni la fila de totales, que son textos
+ *  largos en la columna A y la ensancharían de más). */
+function autofitColumnas(ws, ncols, filaIni, filaFin) {
+  for (let i = 1; i <= ncols; i++) {
+    let max = 8;
+    for (let r = filaIni; r <= filaFin; r++) {
+      const v = ws.getCell(r, i).value;
+      const s = v == null ? '' : (typeof v === 'number' ? v.toFixed(2) : String(v));
+      if (s.length > max) max = s.length;
+    }
+    ws.getColumn(i).width = Math.min(max + 2, 80);
+  }
 }
 
 // ── Info de sesión ────────────────────────────────────────────────────────────
